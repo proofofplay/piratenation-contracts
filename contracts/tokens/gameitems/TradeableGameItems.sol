@@ -20,10 +20,14 @@ import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../../interfaces/ITrait
 import {TradeLicenseExemptComponent, ID as TRADE_LICENSE_EXEMPT_COMPONENT_ID} from "../../generated/components/TradeLicenseExemptComponent.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 import {TradeLibrary} from "../../trade/TradeLibrary.sol";
+import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.tradeablegameitems")
 );
+
+address constant RECEIVER_WALLET = 0xEf438ccfFd1122D59c551836529d399b3E3B0347;
+uint256 constant PERCENT_FEE = 1000;
 
 /**
  * @title Tradeable Game Items
@@ -35,7 +39,8 @@ contract TradeableGameItems is
     IERC1155,
     TokenReentrancyGuardUpgradable,
     GameRegistryConsumerUpgradeable,
-    TradeLicenseChecks
+    TradeLicenseChecks,
+    IERC2981
 {
     using Arrays for uint256[];
     using Arrays for address[];
@@ -77,11 +82,29 @@ contract TradeableGameItems is
         return
             interfaceId == type(IERC1155).interfaceId ||
             interfaceId == type(IERC1155MetadataURI).interfaceId ||
+            interfaceId == type(IERC2981).interfaceId ||
             super.supportsInterface(interfaceId);
     }
 
-    function setMaxTokenId(uint256 _maxTokenId) external onlyRole(MANAGER_ROLE) {
+    function setMaxTokenId(
+        uint256 _maxTokenId
+    ) external onlyRole(MANAGER_ROLE) {
         maxTokenId = _maxTokenId;
+    }
+
+    /** Royalty */
+
+    /**
+     * @inheritdoc IERC2981
+     */
+    function royaltyInfo(
+        uint256 _tokenId,
+        uint256 _salePrice
+    ) public view virtual override returns (address, uint256) {
+        // 10% royalty
+        uint256 royaltyAmount = (_salePrice * PERCENT_FEE) / 10000;
+
+        return (RECEIVER_WALLET, royaltyAmount);
     }
 
     /**
@@ -317,11 +340,11 @@ contract TradeableGameItems is
             amount
         );
 
-        _emitTransferEvent(from, to, ids, amounts);
-
         // If the recipent doesn't have trade license, we should emit an event that the item is burned. (So balances are kept on this contract)
         if (!_hasTradeLicense(to) && !_isTradeExempt(id)) {
             _emitTransferEvent(from, address(0), ids, amounts);
+        } else {
+            _emitTransferEvent(from, to, ids, amounts);
         }
     }
 
@@ -365,8 +388,6 @@ contract TradeableGameItems is
             gameItems.mintBatch(to, ids, amounts, data);
         }
 
-        _emitTransferEvent(from, to, ids, amounts);
-
         // filter out any Ids that are tade exempt
         uint256[] memory filteredIds = new uint256[](ids.length);
         uint256[] memory filteredAmounts = new uint256[](amounts.length);
@@ -390,6 +411,8 @@ contract TradeableGameItems is
         // If the reciever has no trade license, we want to emit an event that the item is burned. (So balances are kept on this contract)
         if (!_hasTradeLicense(to)) {
             _emitTransferEvent(from, address(0), filteredIds, filteredAmounts);
+        } else {
+            _emitTransferEvent(from, to, ids, amounts);
         }
     }
 

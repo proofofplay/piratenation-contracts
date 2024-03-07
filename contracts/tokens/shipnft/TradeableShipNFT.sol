@@ -15,12 +15,16 @@ import {TradeLicenseComponent, ID as TRADE_LICENSE_COMPONENT_ID} from "../../gen
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../ITokenTemplateSystem.sol";
 import {TradeLicenseChecks} from "../TradeLicenseChecks.sol";
 import {TokenReentrancyGuardUpgradable} from "../TokenReentrancyGuardUpgradable.sol";
+import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
 
-import {GAME_LOGIC_CONTRACT_ROLE, SOULBOUND_TRAIT_ID} from "../../Constants.sol";
+import {GAME_LOGIC_CONTRACT_ROLE, SOULBOUND_TRAIT_ID, MANAGER_ROLE} from "../../Constants.sol";
 
 import {IERC721Errors} from "../IERC721Errors.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.tradeableshipnft"));
+
+address constant RECEIVER_WALLET = 0xEf438ccfFd1122D59c551836529d399b3E3B0347;
+uint256 constant PERCENT_FEE = 1000;
 
 /**
  * @title Tradeable ShipNFT
@@ -34,7 +38,8 @@ contract TradeableShipNFT is
     TokenReentrancyGuardUpgradable,
     GameRegistryConsumerUpgradeable,
     IERC721Errors,
-    TradeLicenseChecks
+    TradeLicenseChecks,
+    IERC2981
 {
     mapping(uint256 => address) private _tokenApprovals;
     mapping(address => mapping(address => bool)) private _operatorApprovals;
@@ -63,7 +68,23 @@ contract TradeableShipNFT is
             interfaceId == type(IERC721).interfaceId ||
             interfaceId == type(IERC721Metadata).interfaceId ||
             interfaceId == type(IERC721Enumerable).interfaceId ||
+            interfaceId == type(IERC2981).interfaceId ||
             super.supportsInterface(interfaceId);
+    }
+
+    /** Royalty */
+
+    /**
+     * @inheritdoc IERC2981
+     */
+    function royaltyInfo(
+        uint256 _tokenId,
+        uint256 _salePrice
+    ) public view virtual override returns (address, uint256) {
+        // 10% royalty
+        uint256 royaltyAmount = (_salePrice * PERCENT_FEE) / 10000;
+
+        return (RECEIVER_WALLET, royaltyAmount);
     }
 
     /** Regular stuff */
@@ -239,6 +260,21 @@ contract TradeableShipNFT is
                 false
             ) {
                 _emitTransferEvent(from, to, firstTokenId + i);
+            }
+        }
+    }
+
+    /**
+     * @dev Used to batch emit transfer events for migration purposes
+     */
+    function batchEmitMigrationTransfer(
+        uint256[] calldata tokenIds,
+        address[] calldata owners
+    ) external onlyRole(MANAGER_ROLE) {
+        ShipNFT shipNFT = ShipNFT(_gameRegistry.getSystem(SHIP_NFT_ID));
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            if (shipNFT.ownerOf(tokenIds[i]) == owners[i]) {
+                _emitTransferEvent(address(0), owners[i], tokenIds[i]);
             }
         }
     }

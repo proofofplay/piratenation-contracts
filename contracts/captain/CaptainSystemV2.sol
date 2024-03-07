@@ -12,6 +12,7 @@ import {CaptainComponentV2, ID as CAPTAIN_COMPONENT_ID} from "../generated/compo
 import {ID as PIRATE_NFT_ID} from "../tokens/PirateNFTL2.sol";
 import {GameRegistryLibrary} from "../libraries/GameRegistryLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
+import {PirateLibrary} from "../libraries/PirateLibrary.sol";
 import "../GameRegistryConsumerUpgradeable.sol";
 
 // Globals used by this contract
@@ -76,12 +77,15 @@ contract CaptainSystemV2 is ICaptainSystem, GameRegistryConsumerUpgradeable {
         }
 
         if (tokenContract != address(0)) {
-            ITraitsProvider traitsProvider = ITraitsProvider(
-                _getSystem(TRAITS_PROVIDER_ID)
-            );
-
             // Make sure NFT is properly setup
-            if (_isPirateNFT(traitsProvider, tokenContract, tokenId) != true) {
+            if (
+                PirateLibrary.isPirateNFT(
+                    _gameRegistry,
+                    _traitsProvider(),
+                    tokenContract,
+                    tokenId
+                ) == false
+            ) {
                 revert IsNotPirate();
             }
 
@@ -125,21 +129,5 @@ contract CaptainSystemV2 is ICaptainSystem, GameRegistryConsumerUpgradeable {
         );
         (uint256 nftEntity, ) = captainComponent.getValue(accountEntity);
         (tokenContract, tokenId) = EntityLibrary.entityToToken(nftEntity);
-    }
-
-    /** INTERNAL/PRIVATE **/
-
-    /** Verify NFT is a pirate **/
-    function _isPirateNFT(
-        ITraitsProvider traitsProvider,
-        address tokenContract,
-        uint256 tokenId
-    ) internal view returns (bool) {
-        return (_hasAccessRole(GAME_NFT_CONTRACT_ROLE, tokenContract) &&
-            traitsProvider.hasTrait(
-                tokenContract,
-                tokenId,
-                IS_PIRATE_TRAIT_ID
-            ));
     }
 }

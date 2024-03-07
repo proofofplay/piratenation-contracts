@@ -8,6 +8,8 @@ import {ERC721EnumerableUpgradeable} from "@openzeppelin/contracts-upgradeable/t
 import {PirateNFTL2} from "../tokens/PirateNFTL2.sol";
 import {IGameNFTV2Upgradeable} from "../tokens/gamenft/IGameNFTV2Upgradeable.sol";
 import {ITraitsConsumer} from "../interfaces/ITraitsConsumer.sol";
+import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
+import {GENERATION_TRAIT_ID, XP_TRAIT_ID, IS_PIRATE_TRAIT_ID, LEVEL_TRAIT_ID, NAME_TRAIT_ID} from "../Constants.sol";
 
 /** @title PirateNFTL2 Mock for testing */
 contract PirateNFTL2Mock is PirateNFTL2 {
@@ -27,6 +29,31 @@ contract PirateNFTL2Mock is PirateNFTL2 {
         }
         _safeMint(to, tokenId);
         counter = tokenId + 1;
+
+        ITraitsProvider traitsProvider = _traitsProvider();
+
+        traitsProvider.setTraitUint256(
+            address(this),
+            tokenId,
+            GENERATION_TRAIT_ID,
+            0
+        );
+
+        traitsProvider.setTraitUint256(address(this), tokenId, XP_TRAIT_ID, 0);
+
+        traitsProvider.setTraitUint256(
+            address(this),
+            tokenId,
+            LEVEL_TRAIT_ID,
+            1
+        );
+
+        traitsProvider.setTraitBool(
+            address(this),
+            tokenId,
+            IS_PIRATE_TRAIT_ID,
+            true
+        );
     }
 
     function burnForTests(uint256 tokenId) external {
