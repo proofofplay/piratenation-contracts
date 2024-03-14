@@ -828,7 +828,7 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
         );
         uint256 accountEntity = EntityLibrary.addressToEntity(account);
         uint256 currentAccruedXp = countingSystem.getCount(
-            dungeonScheduledStart,
+            dungeonScheduledStart / 1 days,
             accountEntity
         );
         // Max daily amount reached or none available to grant
@@ -848,7 +848,7 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
         }
         // Update CountingSystem
         countingSystem.incrementCount(
-            dungeonScheduledStart,
+            dungeonScheduledStart / 1 days,
             accountEntity,
             amountToGrant
         );
