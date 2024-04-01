@@ -21,6 +21,7 @@ contract HardcodedDenylistHook is IBeforeTokenTransferHandler, Ownable {
         0x0fc584529a2AEfA997697FAfAcbA5831faC0c22d, //nftx
         0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC, //opensea seaport 1.5
         0x00000000000001ad428e4906aE43D8F9852d0dD6, //opensea seaport 1.4
+        0x0000000000000068F116a894984e2DB1123eB395, //opensea seaport 1.6
         0x1E0049783F008A0085193E00003D00cd54003c71 //opensea conduit
     ];
 
