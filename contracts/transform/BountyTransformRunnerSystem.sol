@@ -18,7 +18,7 @@ import {BaseTransformRunnerSystem, TransformInputComponentLayout, TransformInsta
 import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_LIST_COMPONENT_ID} from "../generated/components/EntityListComponent.sol";
 import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {GenerationCheckComponent, Layout as GenerationCheckComponentLayout, ID as GENERATION_CHECK_COMPONENT_ID} from "../generated/components/GenerationCheckComponent.sol";
-import {NFTActiveBountyComponent, Layout as NFTActiveBountyComponentLayout, ID as NFT_ACTIVE_BOUNTY_COMPONENT_ID} from "../generated/components/NFTActiveBountyComponent.sol";
+import {TransformBountyTrackerComponent, Layout as TransformBountyTrackerComponentLayout, ID as TRANSFORM_BOUNTY_TRACKER_ID} from "../generated/components/TransformBountyTrackerComponent.sol";
 import {ParentComponent, ID as PARENT_COMPONENT_ID} from "../generated/components/ParentComponent.sol";
 import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
 import {CountingSystem, ID as COUNTING_SYSTEM_ID} from "../counting/CountingSystem.sol";
@@ -270,37 +270,30 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         // Check that user still owns all the NFTs they staked for the bounty
         uint256 tokenId;
         address tokenContract;
-        NFTActiveBountyComponent nftActiveBountyComponent = NFTActiveBountyComponent(
-                _gameRegistry.getComponent(NFT_ACTIVE_BOUNTY_COMPONENT_ID)
+        TransformBountyTrackerComponent bountyTrackerComponent = TransformBountyTrackerComponent(
+                _gameRegistry.getComponent(TRANSFORM_BOUNTY_TRACKER_ID)
             );
         for (uint256 i = 0; i < entityInputs.length; ++i) {
             (tokenContract, tokenId) = EntityLibrary.entityToToken(
                 entityInputs[i]
             );
-            NFTActiveBountyComponentLayout
-                memory nftActiveBounty = nftActiveBountyComponent
-                    .getLayoutValue(entityInputs[i]);
+            TransformBountyTrackerComponentLayout
+                memory activeBounty = bountyTrackerComponent.getLayoutValue(
+                    entityInputs[i]
+                );
             // Get NFT current owner address
             address nftOwner = IERC721(tokenContract).ownerOf(tokenId);
-            if (nftActiveBounty.shouldCheckNft == true) {
-                // If activeBountyId matches and caller is owner then clear the component
-                if (
-                    transformInstanceEntity == nftActiveBounty.activeBountyId &&
-                    account == nftOwner
-                ) {
-                    nftActiveBountyComponent.setLayoutValue(
-                        entityInputs[i],
-                        NFTActiveBountyComponentLayout(0, address(0), true)
-                    );
-                } else {
-                    // Otherwise mark bounty as failed
-                    failedBounty = true;
-                }
+
+            // If activeBountyId matches and caller is owner then clear the component
+            if (
+                transformInstanceEntity ==
+                activeBounty.transformInstanceEntity &&
+                account == nftOwner
+            ) {
+                bountyTrackerComponent.remove(entityInputs[i]);
             } else {
-                // Only verify ownership
-                if (account != nftOwner) {
-                    failedBounty = true;
-                }
+                // Otherwise mark bounty as failed
+                failedBounty = true;
             }
         }
         return failedBounty;
@@ -343,8 +336,8 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         uint256 transformInstanceEntity,
         uint256 parentEntity
     ) internal {
-        NFTActiveBountyComponent nftActiveBountyComponent = NFTActiveBountyComponent(
-                _gameRegistry.getComponent(NFT_ACTIVE_BOUNTY_COMPONENT_ID)
+        TransformBountyTrackerComponent bountyTrackerComponent = TransformBountyTrackerComponent(
+                _gameRegistry.getComponent(TRANSFORM_BOUNTY_TRACKER_ID)
             );
         GenerationCheckComponentLayout
             memory generationCheckComponent = GenerationCheckComponent(
@@ -358,7 +351,7 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
                 transformInstanceEntity,
                 traitsProvider,
                 generationCheckComponent,
-                nftActiveBountyComponent,
+                bountyTrackerComponent,
                 entityNfts[i],
                 account
             );
@@ -403,7 +396,7 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         uint256 transformInstanceEntity,
         ITraitsProvider traitsProvider,
         GenerationCheckComponentLayout memory generationCheckComponent,
-        NFTActiveBountyComponent nftActiveBountyComponent,
+        TransformBountyTrackerComponent transformBountyTrackerComponent,
         uint256 entityId,
         address account
     ) internal {
@@ -427,25 +420,23 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         }
 
         // See if pirate is already on a bounty
-        NFTActiveBountyComponentLayout
-            memory nftActiveBounty = nftActiveBountyComponent.getLayoutValue(
-                entityId
-            );
+        TransformBountyTrackerComponentLayout
+            memory activeBounty = transformBountyTrackerComponent
+                .getLayoutValue(entityId);
 
         // If the Pirate is on Bounty that belongs to caller wallet and its activeBountyId is not 0 then revert
         if (
-            nftActiveBounty.walletUsed == account &&
-            nftActiveBounty.activeBountyId != 0
+            activeBounty.wallet == account &&
+            activeBounty.transformInstanceEntity != 0
         ) {
             revert BountyStillRunning();
         }
 
-        nftActiveBountyComponent.setLayoutValue(
+        transformBountyTrackerComponent.setLayoutValue(
             entityId,
-            NFTActiveBountyComponentLayout(
+            TransformBountyTrackerComponentLayout(
                 transformInstanceEntity,
-                account,
-                true
+                account
             )
         );
     }
