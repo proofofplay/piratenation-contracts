@@ -8,13 +8,18 @@ import {MANAGER_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "..
 import {ID as PIRATE_NFT_ID} from "../tokens/PirateNFTL2.sol";
 import {ID as STARTER_PIRATE_NFT_ID} from "../tokens/starterpiratenft/StarterPirateNFT.sol";
 import "../libraries/GameHelperLibrary.sol";
+import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 
 import {IEnergySystemV3, ID} from "./IEnergySystem.sol";
 
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
 import "../GameRegistryConsumerUpgradeable.sol";
-import {EnergyComponent, ID as ENERGY_COMPONENT_ID} from "../generated/components/EnergyComponent.sol";
+import {EnergyComponent, Layout as EnergyComponentLayout, ID as ENERGY_COMPONENT_ID} from "../generated/components/EnergyComponent.sol";
+import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_LIST_COMPONENT_ID} from "../generated/components/EntityListComponent.sol";
+import {EnergyPackCountComponent, ID as ENERGY_PACK_COUNT_COMPONENT_ID} from "../generated/components/EnergyPackCountComponent.sol";
+import {EnergyPackComponent, Layout as EnergyPackComponentLayout, ID as ENERGY_PACK_COMPONENT_ID} from "../generated/components/EnergyPackComponent.sol";
+import {ID as LOOT_ARRAY_COMPONENT_ID} from "../generated/components/LootArrayComponent.sol";
 
 // Globals used by this contract
 
@@ -62,6 +67,9 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
     /// @notice Emitted when a entity cant earn energy
     error CannotEarnEnergy();
 
+    /// @notice Utility not available
+    error NotAvailable();
+
     /**
      * Initializer for this upgradeable contract
      *
@@ -69,6 +77,19 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
      */
     function initialize(address gameRegistryAddress) public initializer {
         __GameRegistryConsumer_init(gameRegistryAddress, ID);
+    }
+
+    /**
+     * Grants energy to the given entity without restrictions
+     *
+     * @param entity        Entity to grant energy to
+     * @param amount        Amount of energy to grant
+     */
+    function grantEnergy(
+        uint256 entity,
+        uint256 amount
+    ) external whenNotPaused nonReentrant onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
+        _grantEnergy(entity, amount);
     }
 
     /**
@@ -205,7 +226,83 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
         maxEnergyEarnable = _maxEnergyEarnable();
     }
 
+    /**
+     * @dev Purchase energy packs, limited by the daily count
+     */
+    function purchaseEnergy() external whenNotPaused nonReentrant {
+        address caller = _getPlayerAccount(_msgSender());
+        // Energy packs
+        EntityListComponentLayout
+            memory entityListComponentLayout = EntityListComponent(
+                _gameRegistry.getComponent(ENTITY_LIST_COMPONENT_ID)
+            ).getLayoutValue(ID);
+        if (entityListComponentLayout.value.length == 0) {
+            revert NotAvailable();
+        }
+        // Form the entity for the player wallet and current day
+        uint256 currentDayWalletEntity = EntityLibrary.tokenToEntity(
+            caller,
+            block.timestamp / 1 days
+        );
+        // Get the daily count for the current day
+        EnergyPackCountComponent energyPackCountComponent = EnergyPackCountComponent(
+                _gameRegistry.getComponent(ENERGY_PACK_COUNT_COMPONENT_ID)
+            );
+        uint256 dailyCount = energyPackCountComponent.getValue(
+            currentDayWalletEntity
+        );
+        if (dailyCount >= entityListComponentLayout.value.length) {
+            revert NotAvailable();
+        }
+        // Get the energy pack entity
+        uint256 energyPackEntity = entityListComponentLayout.value[dailyCount];
+        EnergyPackComponentLayout memory energyPackData = EnergyPackComponent(
+            _gameRegistry.getComponent(ENERGY_PACK_COMPONENT_ID)
+        ).getLayoutValue(energyPackEntity);
+        if (energyPackData.energyAmount == 0) {
+            revert NotAvailable();
+        }
+        // Handle fee
+        LootArrayComponentLibrary.burnLootArray(
+            _gameRegistry.getComponent(LOOT_ARRAY_COMPONENT_ID),
+            caller,
+            energyPackData.lootEntity
+        );
+        // Grant the energy needed
+        _grantEnergy(
+            EntityLibrary.addressToEntity(caller),
+            energyPackData.energyAmount
+        );
+        // Increment the daily count
+        energyPackCountComponent.setValue(
+            currentDayWalletEntity,
+            dailyCount + 1
+        );
+    }
+
     /** INTERNAL */
+
+    function _grantEnergy(uint256 entity, uint256 amount) internal {
+        // Get max energy for entity
+        uint256 maxEnergy = _maxEnergy(entity);
+        // Get current energy for entity
+        uint256 currentEnergy = _energyForEntity(entity);
+        if (maxEnergy == 0) {
+            revert CannotEarnEnergy();
+        }
+        // User cannot exceed max energy with this grant
+        if (currentEnergy + amount > maxEnergy) {
+            revert CannotEarnEnergy();
+        }
+        EnergyComponent energyComponent = EnergyComponent(
+            _gameRegistry.getComponent(ENERGY_COMPONENT_ID)
+        );
+        EnergyComponentLayout memory energyData = energyComponent
+            .getLayoutValue(entity);
+        // Update only the last energy amount to not touch drukenness
+        energyData.lastEnergyAmount += amount;
+        energyComponent.setLayoutValue(entity, energyData);
+    }
 
     function _giveEnergy(uint256 entity, uint256 amount) internal {
         uint256 maxEnergy = _maxEnergy(entity);

@@ -10,7 +10,7 @@ import {RandomLibrary} from "../libraries/RandomLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {TransformLibrary} from "./TransformLibrary.sol";
 
-import {RANDOMIZER_ROLE} from "../Constants.sol";
+import {RANDOMIZER_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 
 import {ILootSystemV2, ID as LOOT_SYSTEM_ID} from "../loot/ILootSystemV2.sol";
 import {IGameItems} from "../tokens/gameitems/IGameItems.sol";
@@ -144,6 +144,26 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
+     * Starts a transform for a user with a given account
+     *
+     * @param params Transform parameters for the transform (See struct definition)
+     * @param account Account to start the transform for
+     * @return returns transformInstanceEntity that was created to track this transform run
+     */
+    function startTransformWithAccount(
+        TransformParams calldata params,
+        address account
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        onlyRole(GAME_LOGIC_CONTRACT_ROLE)
+        returns (uint256)
+    {
+        return _startTransform(params, account);
+    }
+
+    /**
      * Starts a transform for a user
      *
      * @param params Transform parameters for the transform (See struct definition)
@@ -153,116 +173,44 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     function startTransform(
         TransformParams calldata params
     ) external nonReentrant whenNotPaused returns (uint256) {
-        uint256 transformEntity = params.transformEntity;
-
         address account = _getPlayerAccount(_msgSender());
+        return _startTransform(params, account);
+    }
 
-        ITransformRunnerSystem[] memory transformRunners = _getTransformRunners(
-            transformEntity
-        );
-
-        // Error if we have no runners
-        if (transformRunners.length == 0) {
-            revert NoTransformRunners(transformEntity);
-        }
-
-        // Verify user can start this transform and meets requirements
-        if (_isTransformAvailable(account, transformRunners, params) != true) {
-            revert TransformNotAvailable(account, transformEntity);
-        }
-
-        // Validate and burn inputs
-        _validateAndBurnTransformInputs(account, params);
-
-        // Create transform instance entity to track run
-        uint256 transformInstanceEntity = GUIDLibrary.guid(
-            _gameRegistry,
-            "transformsystem.instance"
-        );
-
+    /**
+     * Complete a transform for a user with a given account
+     *
+     * @param transformInstanceEntity Transform instance to complete
+     * @param account Account to complete the transform for
+     */
+    function completeTransformWithAccount(
+        uint256 transformInstanceEntity,
+        address account
+    ) external nonReentrant whenNotPaused onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         TransformInstanceComponentLayout
-            memory transformInstance = TransformInstanceComponentLayout({
-                transformEntity: transformEntity,
-                account: account,
-                status: uint8(TransformInstanceStatus.STARTED),
-                startTime: uint32(block.timestamp),
-                needsVrf: false,
-                numSuccess: 0,
-                count: uint16(params.count)
-            });
-
-        // Allow runner to run its checks, revert if necessary, and start the transform
-        bool needsVrf;
-
-        for (uint256 idx; idx < transformRunners.length; ++idx) {
-            needsVrf =
-                transformRunners[idx].startTransform(
-                    transformInstance,
-                    transformInstanceEntity,
-                    params
-                ) ||
-                needsVrf;
-        }
-
-        transformInstance.needsVrf = needsVrf;
-
-        // Track new pending instance for this account
-        uint256[] memory newInstances = new uint256[](1);
-        newInstances[0] = transformInstanceEntity;
-
-        PendingTransformInstancesComponent(
-            _gameRegistry.getComponent(PENDING_TRANSFORM_INSTANCES_COMPONENT_ID)
-        ).append(
-                EntityLibrary.addressToEntity(account),
-                PendingTransformInstancesComponentLayout(newInstances)
-            );
-
-        // Set loot array component to track inputs
-        LootEntityArrayComponent(
-            _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID)
-        ).setLayoutValue(
-                transformInstanceEntity,
-                LootArrayComponentLibrary.convertLootToLootEntityArray(
-                    params.inputs
-                )
-            );
-
-        // Update account transform data
-        TransformAccountDataComponentLayout
-            memory accountTransformData = TransformLibrary
-                .getAccountTransformData(
-                    _gameRegistry,
-                    account,
-                    transformEntity
-                );
-        accountTransformData.numPending += params.count;
-
-        TransformAccountDataComponent(
-            _gameRegistry.getComponent(TRANSFORM_ACCOUNT_DATA_COMPONENT_ID)
-        ).setLayoutValue(
-                TransformLibrary._getAccountTransformDataEntity(
-                    account,
-                    transformEntity
-                ),
-                accountTransformData
-            );
-
-        // If transform is completeable, complete it immediately
-        if (_isCompleteable(account, transformRunners, transformInstance)) {
-            _completeTransform(
-                account,
-                transformRunners,
-                transformInstance,
+            memory transformInstance = _getTransformInstance(
                 transformInstanceEntity
             );
-        } else {
-            // If the transform isn't immediately completable we should save it here
-            TransformInstanceComponent(
-                _gameRegistry.getComponent(TRANSFORM_INSTANCE_COMPONENT_ID)
-            ).setLayoutValue(transformInstanceEntity, transformInstance);
+
+        // Make sure current account is the owner of the transform instance
+        if (account != transformInstance.account) {
+            revert CallerNotOwner(account, transformInstance.account);
         }
 
-        return transformInstanceEntity;
+        ITransformRunnerSystem[] memory transformRunners = _getTransformRunners(
+            transformInstance.transformEntity
+        );
+
+        if (!_isCompleteable(account, transformRunners, transformInstance)) {
+            revert TransformNotCompleteable(transformInstanceEntity);
+        }
+
+        _completeTransform(
+            account,
+            transformRunners,
+            transformInstance,
+            transformInstanceEntity
+        );
     }
 
     /**
@@ -379,6 +327,121 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     }
 
     /** INTERNAL **/
+
+    function _startTransform(
+        TransformParams calldata params,
+        address account
+    ) internal returns (uint256) {
+        uint256 transformEntity = params.transformEntity;
+
+        ITransformRunnerSystem[] memory transformRunners = _getTransformRunners(
+            transformEntity
+        );
+
+        // Error if we have no runners
+        if (transformRunners.length == 0) {
+            revert NoTransformRunners(transformEntity);
+        }
+
+        // Verify user can start this transform and meets requirements
+        if (_isTransformAvailable(account, transformRunners, params) != true) {
+            revert TransformNotAvailable(account, transformEntity);
+        }
+
+        // Validate and burn inputs
+        _validateAndBurnTransformInputs(account, params);
+
+        // Create transform instance entity to track run
+        uint256 transformInstanceEntity = GUIDLibrary.guid(
+            _gameRegistry,
+            "transformsystem.instance"
+        );
+
+        TransformInstanceComponentLayout
+            memory transformInstance = TransformInstanceComponentLayout({
+                transformEntity: transformEntity,
+                account: account,
+                status: uint8(TransformInstanceStatus.STARTED),
+                startTime: uint32(block.timestamp),
+                needsVrf: false,
+                numSuccess: 0,
+                count: uint16(params.count)
+            });
+
+        // Allow runner to run its checks, revert if necessary, and start the transform
+        bool needsVrf;
+
+        for (uint256 idx; idx < transformRunners.length; ++idx) {
+            needsVrf =
+                transformRunners[idx].startTransform(
+                    transformInstance,
+                    transformInstanceEntity,
+                    params
+                ) ||
+                needsVrf;
+        }
+
+        transformInstance.needsVrf = needsVrf;
+
+        // Track new pending instance for this account
+        uint256[] memory newInstances = new uint256[](1);
+        newInstances[0] = transformInstanceEntity;
+
+        PendingTransformInstancesComponent(
+            _gameRegistry.getComponent(PENDING_TRANSFORM_INSTANCES_COMPONENT_ID)
+        ).append(
+                EntityLibrary.addressToEntity(account),
+                PendingTransformInstancesComponentLayout(newInstances)
+            );
+
+        // Set loot array component to track inputs
+        LootEntityArrayComponent(
+            _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID)
+        ).setLayoutValue(
+                transformInstanceEntity,
+                LootArrayComponentLibrary.convertLootToLootEntityArray(
+                    params.inputs
+                )
+            );
+
+        // Update account transform data
+        TransformAccountDataComponentLayout
+            memory accountTransformData = TransformLibrary
+                .getAccountTransformData(
+                    _gameRegistry,
+                    account,
+                    transformEntity
+                );
+        accountTransformData.numPending += params.count;
+
+        TransformAccountDataComponent(
+            _gameRegistry.getComponent(TRANSFORM_ACCOUNT_DATA_COMPONENT_ID)
+        ).setLayoutValue(
+                TransformLibrary._getAccountTransformDataEntity(
+                    account,
+                    transformEntity
+                ),
+                accountTransformData
+            );
+
+        // If transform is completeable, complete it immediately
+        if (_isCompleteable(account, transformRunners, transformInstance)) {
+            _completeTransform(
+                account,
+                transformRunners,
+                transformInstance,
+                transformInstanceEntity
+            );
+        } else {
+            // If the transform isn't immediately completable we should save it here
+            TransformInstanceComponent(
+                _gameRegistry.getComponent(TRANSFORM_INSTANCE_COMPONENT_ID)
+            ).setLayoutValue(transformInstanceEntity, transformInstance);
+        }
+
+        return transformInstanceEntity;
+    }
+
     function _isCompleteable(
         address,
         ITransformRunnerSystem[] memory runners,

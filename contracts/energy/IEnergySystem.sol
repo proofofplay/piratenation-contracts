@@ -55,6 +55,14 @@ interface IEnergySystemV3 {
     function giveEnergy(uint256 entity, uint256 amount) external;
 
     /**
+     * Grants energy to the given entity without restrictions
+     *
+     * @param entity        Entity to grant energy to
+     * @param amount        Amount of energy to grant
+     */
+    function grantEnergy(uint256 entity, uint256 amount) external;
+
+    /**
      * Spends energy for the given entity
      *
      * @param entity        Entity to spend energy for
