@@ -16,6 +16,8 @@ import {ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../../tokens/ITokenTemplateSystem.
 import {NameComponent, ID as NameComponentId, Layout as NameComponentLayout} from "../../generated/components/NameComponent.sol";
 import {DescriptionComponent, ID as DescriptionComponentId, Layout as DescriptionComponentLayout} from "../../generated/components/DescriptionComponent.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../../generated/components/LevelComponent.sol";
+import {XpComponent, ID as XP_COMPONENT_ID} from "../../generated/components/XpComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.starterpiratenfttokenurihandler")
@@ -94,10 +96,11 @@ contract StarterPirateNFTTokenURIHandler is
         ContractInfo storage contractInfo = _contracts[tokenContract];
         uint256[] memory assetIds = this.getAssetTraitIds(tokenContract);
 
-        uint256 numStaticTraits = 6;
+        uint256 numStaticTraits = 8;
         TokenURITrait[] memory extraTraits = new TokenURITrait[](
             numStaticTraits + assetIds.length
         );
+        uint256 entity = EntityLibrary.tokenToEntity(tokenContract, tokenId);
 
         // Note: All of the below try to get the data from the template system so that inherited traits show up
 
@@ -161,6 +164,30 @@ contract StarterPirateNFTTokenURIHandler is
             name: "Expertise",
             dataType: TraitDataType.STRING,
             value: _expertise(tokenContract, tokenId),
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Level
+        extraTraits[6] = TokenURITrait({
+            name: "Level",
+            dataType: TraitDataType.UINT,
+            value: abi.encode(
+                LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID))
+                    .getValue(entity)
+            ),
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // XP
+        extraTraits[7] = TokenURITrait({
+            name: "XP",
+            dataType: TraitDataType.UINT,
+            value: abi.encode(
+                XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID))
+                    .getValue(entity)
+            ),
             isTopLevelProperty: false,
             hidden: false
         });

@@ -21,6 +21,7 @@ import {NameComponent, ID as NAME_COMPONENT_ID} from "../../generated/components
 import {SkinContainerComponent, Layout as SkinContainerComponentLayout, ID as SKIN_CONTAINER_ID} from "../../generated/components/SkinContainerComponent.sol";
 import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../../generated/components/LevelComponent.sol";
 import {HealthArrayComponent, Layout as HealthArrayComponentLayout, ID as HEALTH_ARRAY_ID} from "../../generated/components/HealthArrayComponent.sol";
+import {ItemsEquippedComponent, ID as ITEMS_EQUIPPED_COMPONENT_ID} from "../../generated/components/ItemsEquippedComponent.sol";
 
 uint256 constant EQUIPMENT_LIMIT = 6;
 uint256 constant ID = uint256(
@@ -273,12 +274,15 @@ contract ShipNFTTokenURIHandler is
         uint256 tokenId
     ) internal view returns (TokenURITrait[] memory) {
         // Extend static traits by number of equipped items bounded by EQUIPMENT_LIMIT
-        uint256[] memory equippedItems = IEquippable(
-            _getSystem(SHIP_EQUIPMENT_ID)
-        ).getItems(
-                EntityLibrary.tokenToEntity(tokenContract, tokenId),
-                SHIP_CORE_SLOT_TYPE
-            );
+        // uint256[] memory equippedItems = IEquippable(
+        //     _getSystem(SHIP_EQUIPMENT_ID)
+        // ).getItems(
+        //         EntityLibrary.tokenToEntity(tokenContract, tokenId),
+        //         SHIP_CORE_SLOT_TYPE
+        //     );
+        uint256[] memory equippedItems = ItemsEquippedComponent(
+            _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
+        ).getValue(EntityLibrary.tokenToEntity(tokenContract, tokenId));
 
         // Make sure to have an upper bound on number of items to avoid OOG
         uint256 itemLength = equippedItems.length > EQUIPMENT_LIMIT

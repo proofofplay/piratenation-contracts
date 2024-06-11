@@ -14,6 +14,8 @@ import {ITraitsProvider, TokenURITrait, TraitDataType} from "../../interfaces/IT
 import {NameComponent, ID as NameComponentId} from "../../generated/components/NameComponent.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 import {ELEMENTAL_AFFINITIES, EXPERTISE_VALUES} from "../starterpiratenft/StarterPirateNFTTokenURIHandler.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../../generated/components/LevelComponent.sol";
+import {XpComponent, ID as XP_COMPONENT_ID} from "../../generated/components/XpComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.piratenfttokenurihandler")
@@ -97,9 +99,10 @@ contract PirateNFTTokenURIHandler is
             baseImageURIs[uint256(TokenTypeImage.IMAGE)],
             tokenId.toString()
         );
+        uint256 entity = EntityLibrary.tokenToEntity(tokenContract, tokenId);
 
         uint256[] memory assetIds = this.getAssetTraitIds(tokenContract);
-        uint8 numStaticTraits = 7;
+        uint8 numStaticTraits = 9;
         TokenURITrait[] memory extraTraits = new TokenURITrait[](
             numStaticTraits + assetIds.length
         );
@@ -165,6 +168,30 @@ contract PirateNFTTokenURIHandler is
             name: "Expertise",
             dataType: TraitDataType.STRING,
             value: _expertise(tokenContract, tokenId),
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Level
+        extraTraits[7] = TokenURITrait({
+            name: "Level",
+            dataType: TraitDataType.UINT,
+            value: abi.encode(
+                LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID))
+                    .getValue(entity)
+            ),
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // XP
+        extraTraits[8] = TokenURITrait({
+            name: "XP",
+            dataType: TraitDataType.UINT,
+            value: abi.encode(
+                XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID))
+                    .getValue(entity)
+            ),
             isTopLevelProperty: false,
             hidden: false
         });

@@ -94,6 +94,14 @@ contract MarkToken is
         _burn(from, amount);
     }
 
+    function transfer(
+        address recipient,
+        uint256 amount
+    ) public virtual override(ERC20Upgradeable, IERC20Upgradeable) onlyRole(MINTER_ROLE) returns (bool) {
+        _transfer(_msgSender(), recipient, amount);
+        return true;
+    }
+
     /**
      * @inheritdoc ERC20Upgradeable
      * @dev Note: minters can also move currency around to allow in-game actions.

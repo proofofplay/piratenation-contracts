@@ -12,6 +12,8 @@ import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsPr
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
+import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComponent.sol";
 
 import {LootTableComponentV3Old, Layout as LootTableComponentStruct, ID as LOOT_TABLE_V3_OLD_COMPONENT_ID} from "../generated/components/LootTableComponentV3Old.sol";
 import {MintedStarterPirateComponent, Layout as MintedStarterPirateComponentStruct, ID as MINTED_STARTER_PIRATE_COMPONENT_ID} from "../generated/components/MintedStarterPirateComponent.sol";
@@ -304,13 +306,28 @@ contract StarterPirateSystem is GameRegistryConsumerUpgradeable, ILootCallback {
             HAS_PIRATE_SOUL_TRAIT_ID,
             false
         );
+
+        uint256 entity = EntityLibrary.tokenToEntity(starterPirateNft, tokenId);
+
         // Name trait component
         string memory pirateName = string(
             abi.encodePacked("Pirate #", tokenId.toString())
         );
         NameComponent(_gameRegistry.getComponent(NameComponentId)).setValue(
-            EntityLibrary.tokenToEntity(starterPirateNft, tokenId),
+            entity,
             pirateName
+        );
+
+        // Level component
+        LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID)).setValue(
+                entity,
+                1
+            );
+
+        // XP component
+        XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID)).setValue(
+            entity,
+            0
         );
     }
 

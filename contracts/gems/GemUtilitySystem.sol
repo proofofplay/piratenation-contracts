@@ -45,6 +45,12 @@ contract GemUtilitySystem is
     /// @notice Not available for gem utility
     error NotAvailable();
 
+    /// @notice Invalid count param
+    error InvalidCountParam();
+
+    /// @notice Invalid resource cost
+    error InvalidResourceCost(uint256 resourceId, uint256 amount);
+
     /// @notice Cannot remove cooldown
     error CannotRemoveCooldown();
 
@@ -56,6 +62,9 @@ contract GemUtilitySystem is
 
     /// @notice Invalid cost
     error InvalidCost();
+
+    /// @notice Invalid energy cost
+    error InvalidEnergyCost();
 
     /// @notice Expected cost mismatch
     error ExpectedCostMismatch(
@@ -91,34 +100,39 @@ contract GemUtilitySystem is
         ) {
             revert NotAvailable();
         }
+        if (params.count == 0) {
+            revert InvalidCountParam();
+        }
         // Handle gem exchange for the resources required
         uint256 totalEnergyInSeconds = _handleGemsForResourcesExchange(
             caller,
             params
         );
-
-        if (totalEnergyInSeconds > 0) {
-            // Convert the total energy in seconds to the gem cost, then multiply by how many times the transform is being run
-            uint256 gemCost = _convertSecondsToGemCost(
-                totalEnergyInSeconds,
-                GemCostMultiplierComponent(
-                    _gameRegistry.getComponent(GEM_COST_MULTIPLIER_COMPONENT_ID)
-                ).getLayoutValue(params.transformEntity).resourceMultiplier
-            ) * params.count;
-            if (gemCost == 0) {
-                revert InvalidCost();
-            }
-            // Revert if actual gem cost is greater than expected
-            if (gemCost > expectedGemCost) {
-                revert ExpectedCostMismatch(expectedGemCost, gemCost);
-            }
-            // Burn the gems from the user
-            GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID)).burn(
-                caller,
-                GEM_TOKEN_ID,
-                gemCost
-            );
+        // Revert if no energy cost as it is invalid
+        if (totalEnergyInSeconds == 0) {
+            revert InvalidEnergyCost();
         }
+
+        // Convert the total energy in seconds to the gem cost, along with the multiplier
+        uint256 gemCost = _convertSecondsToGemCost(
+            totalEnergyInSeconds,
+            GemCostMultiplierComponent(
+                _gameRegistry.getComponent(GEM_COST_MULTIPLIER_COMPONENT_ID)
+            ).getLayoutValue(params.transformEntity).resourceMultiplier
+        );
+        if (gemCost == 0) {
+            revert InvalidCost();
+        }
+        // Revert if actual gem cost is greater than expected
+        if (gemCost > expectedGemCost) {
+            revert ExpectedCostMismatch(expectedGemCost, gemCost);
+        }
+        // Burn the gems from the user
+        GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID)).burn(
+            caller,
+            GEM_TOKEN_ID,
+            gemCost
+        );
         return
             TransformSystem(_getSystem(TRANSFORM_SYSTEM_ID))
                 .startTransformWithAccount(params, caller);
@@ -169,6 +183,9 @@ contract GemUtilitySystem is
                     .getLayoutValue(transformInstance.transformEntity)
                     .cooldownMultiplier
             );
+            if (gemCost == 0) {
+                revert InvalidCost();
+            }
             // Revert if actual gem cost is greater than expected
             if (gemCost > expectedGemCost) {
                 revert ExpectedCostMismatch(expectedGemCost, gemCost);
@@ -309,7 +326,7 @@ contract GemUtilitySystem is
             (defTokenContract, defTokenId) = EntityLibrary.entityToToken(
                 transformDefInputs.inputEntity[idx]
             );
-            defAmount = transformDefInputs.amount[idx];
+            defAmount = transformDefInputs.amount[idx] * params.count;
 
             if (
                 ILootSystemV2.LootType(transformDefInputs.inputType[idx]) ==
@@ -399,7 +416,12 @@ contract GemUtilitySystem is
                 (amount / gemResourceCostComponentLayout.unitDenomination) *
                 gemResourceCostComponentLayout.unitEnergyCost;
         }
-        return energyCost * gemResourceCostComponentLayout.unitEnergyMultiplier;
+        uint256 totalCost = energyCost *
+            gemResourceCostComponentLayout.unitEnergyMultiplier;
+        if (totalCost == 0) {
+            revert InvalidResourceCost(resourceId, amount);
+        }
+        return totalCost;
     }
 
     /**

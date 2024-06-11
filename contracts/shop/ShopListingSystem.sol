@@ -13,7 +13,9 @@ import {EnabledComponent, ID as ENABLED_COMPONENT_ID} from "../generated/compone
 import {ID as LOOT_ARRAY_COMPONENT_ID} from "../generated/components/LootArrayComponent.sol";
 import {MintCounterComponent, Layout as MintCounterLayout, ID as MINT_COUNTER_COMPONENT_ID} from "../generated/components/MintCounterComponent.sol";
 import {ShopFixedPricingComponent, Layout as ShopFixedPricingLayout, ID as SHOP_FIXED_PRICING_COMPONENT_ID} from "../generated/components/ShopFixedPricingComponent.sol";
+import {ShopTokenPricingComponent, Layout as ShopTokenPricingLayout, ID as SHOP_TOKEN_PRICING_COMPONENT_ID} from "../generated/components/ShopTokenPricingComponent.sol";
 import {ShopListingComponent, Layout as ShopListingLayout, ID as SHOP_LISTING_COMPONENT_ID} from "../generated/components/ShopListingComponent.sol";
+import {ShopTokenDeliveredComponent, Layout as ShopTokenDeliveredLayout, ID as SHOP_TOKEN_DELIVERED_COMPONENT_ID} from "../generated/components/ShopTokenDeliveredComponent.sol";
 import {ShopReceiptComponent, Layout as ShopReceiptLayout, ID as SHOP_RECEIPT_COMPONENT_ID} from "../generated/components/ShopReceiptComponent.sol";
 import {TimeRangeComponent, Layout as TimeRangeComponentLayout, ID as TIME_RANGE_COMPONENT_ID} from "../generated/components/TimeRangeComponent.sol";
 import {ILootSystem} from "../loot/ILootSystem.sol";
@@ -56,6 +58,9 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         address treasuryAddress,
         address paymentTokenAddress
     );
+
+    /// @notice Purchase must not have already been processed
+    error PurchaseAlreadyProcessed(uint256 purchaseId);
 
     // USDC token address used by Crossmint
     address public _paymentTokenAddress;
@@ -106,7 +111,10 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         uint8 quantity
     ) external nonReentrant onlyRole(SHOP_MINTER_ROLE) whenNotPaused {
         Components memory components = _getComponents(skuEntity);
-        uint256 price = components.pricing.price;
+        // uint256 price = components.pricing.price;
+        uint256 price = ShopFixedPricingComponent(
+            _gameRegistry.getComponent(SHOP_FIXED_PRICING_COMPONENT_ID)
+        ).getLayoutValue(skuEntity).price;
 
         // Validate listing
         _validateOrder(components, price, skuEntity, quantity);
@@ -125,38 +133,47 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         _generateReceipt(price * quantity, 0, skuEntity, quantity, to);
     }
 
-    /**
-     * Accepts native on-chain payment and mints SKU for a Shop listing
-     * @dev Must send ETH with the transaction, and listing must have `ethPrice`
-     * @param to Address that shop listing loot will be minted to
-     * @param skuEntity Entity of the SKU to mint
-     * @param quantity Amount of SKU's to mint
-     */
-    function processEthOrder(
-        address to,
-        uint256 skuEntity,
-        uint8 quantity
-    ) external payable nonReentrant onlyRole(SHOP_MINTER_ROLE) whenNotPaused {
-        // TODO: FINISH WRITING TEST CASES FOR THIS FUNCTION
-        require(false, "Not implemented");
+    // Called from the Shop Token Purchases Oracle.
+    function deliverTokenPurchase(
+        address purchaser,
+        uint256 purchaseId,
+        uint256[] calldata skuEntities,
+        uint8[] calldata quantities,
+        uint256 amount
+    ) external nonReentrant onlyRole(SHOP_MINTER_ROLE) whenNotPaused {
+        // Purchases may only ever been processed once.
+        //get the component.
+        // if its set rever
+         ShopTokenDeliveredComponent shopTokenDeliveredComponent = ShopTokenDeliveredComponent(
+            _gameRegistry.getComponent(SHOP_TOKEN_DELIVERED_COMPONENT_ID)
+        );
 
-        Components memory components = _getComponents(skuEntity);
-        uint256 price = components.pricing.ethPrice;
-        uint256 totalPrice = price * quantity;
-
-        // Validate listing
-        _validateOrder(components, price, skuEntity, quantity);
-        if (msg.value != totalPrice) {
-            revert InsufficientFundsSent(msg.value, totalPrice);
+        if (shopTokenDeliveredComponent.getValue(purchaseId) == true) {
+            revert PurchaseAlreadyProcessed(purchaseId);
         }
 
-        // Mint SKU to address and record purchase with receipt
-        _fulfillOrder(components.counter, to, skuEntity, quantity);
-        _generateReceipt(0, totalPrice, skuEntity, quantity, to);
+        shopTokenDeliveredComponent.setValue(purchaseId, true);
+        // because the l1 has already taken funds and is just delivering, we can skip validation and processing of funds
 
-        // Transfer funds to Shop treasury account
-        (bool s, ) = payable(_treasuryAddress).call{value: totalPrice}("");
-        require(s, "Failed to send funds to treasury");
+        _fulfillTokenOrder(purchaser, skuEntities, quantities);
+        _generateReceipt(amount, 0, skuEntities, quantities, purchaser);
+    }
+
+    function _fulfillTokenOrder(
+        address to,
+        uint256[] calldata skuEntities,
+        uint8[] calldata quantities
+    ) internal {
+        for (uint256 i = 0; i < skuEntities.length; i++) {
+            Components memory components = _getComponents(skuEntities[i]);
+
+            _fulfillOrder(
+                components.counter,
+                to,
+                skuEntities[i],
+                quantities[i]
+            );
+        }
     }
 
     /**
@@ -189,6 +206,33 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         MintCounterComponent(
             _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
         ).setLayoutValue(skuEntity, counter);
+    }
+
+    function _generateReceipt(
+        uint256 subtotal,
+        uint256 ethSubtotal,
+        uint256[] calldata skuEntities,
+        uint8[] calldata quantities,
+        address account
+    ) internal {
+        uint256 receiptEntity = GUIDLibrary.guid(
+            _gameRegistry,
+            "shoplistingsystem.receipt"
+        );
+        // Create a receipt entry
+        ShopReceiptComponent(
+            _gameRegistry.getComponent(SHOP_RECEIPT_COMPONENT_ID)
+        ).setLayoutValue(
+                receiptEntity,
+                ShopReceiptLayout({
+                    subtotal: subtotal,
+                    ethSubtotal: ethSubtotal,
+                    purchaseTime: block.timestamp,
+                    skuEntities: skuEntities,
+                    quantities: quantities,
+                    account: account
+                })
+            );
     }
 
     function _generateReceipt(
@@ -234,9 +278,6 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         ).getLayoutValue(skuEntity);
         components.listing = ShopListingComponent(
             _gameRegistry.getComponent(SHOP_LISTING_COMPONENT_ID)
-        ).getLayoutValue(skuEntity);
-        components.pricing = ShopFixedPricingComponent(
-            _gameRegistry.getComponent(SHOP_FIXED_PRICING_COMPONENT_ID)
         ).getLayoutValue(skuEntity);
     }
 

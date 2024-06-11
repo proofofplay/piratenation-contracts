@@ -11,6 +11,9 @@ import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.s
 import {ICaptainSystem, ID as CAPTAIN_SYSTEM_ID} from "../captain/ICaptainSystem.sol";
 import {PERCENTAGE_RANGE, GAME_LOGIC_CONTRACT_ROLE, LEVEL_TRAIT_ID, XP_TRAIT_ID} from "../Constants.sol";
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
+import {EntityLibrary} from "../core/EntityLibrary.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
+import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComponent.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
 
@@ -122,6 +125,7 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
         // Burn the gold needed to upgrade
         _burnGold(account, gameGlobals, currentLevel, desiredLevel);
 
+        // TODO: Remove after full migration to componennts
         // Increment level trait
         traitsProvider.incrementTrait(
             nftContract,
@@ -129,6 +133,13 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
             LEVEL_TRAIT_ID,
             desiredLevel - currentLevel
         );
+
+        // Set level component value
+        uint256 entityId = EntityLibrary.tokenToEntity(nftContract, nftTokenId);
+        LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID)).setValue(
+                entityId,
+                desiredLevel
+            );
 
         // Emit event
         emit UpgradePirateLevel(nftContract, nftTokenId, desiredLevel);
@@ -181,11 +192,22 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
         );
         amount = Math.min(maxXp - currentXp, amount);
         if (amount > 0) {
+            // TODO: Remove after full migration to componennts
             traitsProvider.incrementTrait(
                 tokenContract,
                 tokenId,
                 XP_TRAIT_ID,
                 amount
+            );
+
+            // Set XP component
+            uint256 entityId = EntityLibrary.tokenToEntity(
+                tokenContract,
+                tokenId
+            );
+            XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID)).setValue(
+                entityId,
+                currentXp + amount
             );
         }
     }

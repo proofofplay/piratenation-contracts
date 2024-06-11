@@ -8,6 +8,7 @@ import {COMBAT_MODIFIERS_TRAIT_ID, EQUIPMENT_TYPE_TRAIT_ID, GAME_ITEMS_CONTRACT_
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {Item, IEquippable} from "./IEquippable.sol";
+import {ItemsEquippedComponent, ID as ITEMS_EQUIPPED_COMPONENT_ID} from "../generated/components/ItemsEquippedComponent.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
 
@@ -333,6 +334,9 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
             item.slotType,
             currentSlots
         );
+        ItemsEquippedComponent(
+            _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
+        ).setValue(parentEntity, currentSlots);
     }
 
     /**
@@ -370,6 +374,9 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
             item.slotType,
             slots
         );
+        ItemsEquippedComponent(
+            _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
+        ).setValue(parentEntity, slots);
 
         // Default behavior is not to mint the item back to caller
         // (tokenContract, tokenId) = EntityLibrary.entityToToken(item.itemEntity);
