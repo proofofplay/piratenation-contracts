@@ -19,10 +19,10 @@ interface IGemUtilitySystem {
     /**
      * @dev Complete a transform, fulfill missing resources, cooldowns, energy with gems
      */
-    function gemCompleteTransform(
-        uint256 transformInstanceEntity,
-        uint256 expectedGemCost
-    ) external;
+    // function gemCompleteTransform(
+    //     uint256 transformInstanceEntity,
+    //     uint256 expectedGemCost
+    // ) external;
 
     /**
      * @dev Remove cooldown from a transform

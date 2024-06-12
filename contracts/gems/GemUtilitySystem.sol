@@ -143,6 +143,7 @@ contract GemUtilitySystem is
      * @param transformInstanceEntity The transform instance entity to complete
      * @param expectedGemCost Expected gem cost for the transform
      */
+    /**
     function gemCompleteTransform(
         uint256 transformInstanceEntity,
         uint256 expectedGemCost
@@ -213,6 +214,7 @@ contract GemUtilitySystem is
         TransformSystem(_getSystem(TRANSFORM_SYSTEM_ID))
             .completeTransformWithAccount(transformInstanceEntity, caller);
     }
+     */
 
     /**
      * @dev Remove only the cooldown on a transform, primarily used for quest cooldowns
@@ -260,6 +262,53 @@ contract GemUtilitySystem is
             gemCost
         );
     }
+
+    /** HELPERS **/
+
+    /**
+     * @dev Convert seconds to gem cost
+     */
+    function convertSecondsToGemCost(
+        uint256 amountOfSeconds,
+        uint256 multiplier
+    ) external view returns (uint256 gemCost) {
+        return _convertSecondsToGemCost(amountOfSeconds, multiplier);
+    }
+
+    /**
+     * @dev Calculate the gem cost using the time remaining and the entity id of the correct formula
+     */
+    function calculateGemCost(
+        uint256 timeRemaining,
+        uint256 entityId
+    ) external view returns (uint256) {
+        return
+            _calculateGemCost(
+                timeRemaining,
+                GemFormulaComponent(
+                    _gameRegistry.getComponent(GEM_FORMULA_COMPONENT_ID)
+                ).getLayoutValue(entityId)
+            );
+    }
+
+    /**
+     * @dev Convert resource to energy seconds
+     */
+    function convertResourceToEnergySeconds(
+        uint256 resourceId,
+        uint256 amount
+    ) external view returns (uint256) {
+        return
+            _convertResourceToEnergySeconds(
+                GemResourceCostComponent(
+                    _gameRegistry.getComponent(GEM_RESOURCE_COST_COMPONENT_ID)
+                ),
+                resourceId,
+                amount
+            );
+    }
+
+    /** INTERNAL **/
 
     /**
      * @dev Check if a cooldown reduction is needed and handle the gem cost, set the last completion time to zero
