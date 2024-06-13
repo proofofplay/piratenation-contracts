@@ -259,7 +259,7 @@ contract PirateTokenShop is
         address purchaser,
         uint256[] calldata skuEntities,
         uint256[] calldata quantities
-    ) external override nonReentrant whenNotPaused returns (uint256, uint256) {
+    ) external override whenNotPaused returns (uint256, uint256) {
         if (allowedStakeContract != msg.sender) {
             revert InvalidStakeContract();
         }
@@ -282,7 +282,7 @@ contract PirateTokenShop is
     function purchase(
         uint256[] calldata skuEntities,
         uint256[] calldata quantities
-    ) external nonReentrant whenNotPaused returns (uint256, uint256) {
+    ) external whenNotPaused returns (uint256, uint256) {
         return _purchase(_msgSender(), skuEntities, quantities, 0);
     }
 
@@ -311,7 +311,7 @@ contract PirateTokenShop is
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external nonReentrant whenNotPaused returns (uint256, uint256) {
+    ) external whenNotPaused returns (uint256, uint256) {
         IERC20Permit(address(token)).permit(
             _msgSender(),
             address(this),
