@@ -9,6 +9,8 @@ import {TradeableShipNFT, ID as TRADEABLE_SHIP_NFT} from "./TradeableShipNFT.sol
 import {TradeLicenseComponent, Layout as TradeLicenseComponentStruct, ID as TRADE_LICENSE_COMPONENT_ID} from "../../generated/components/TradeLicenseComponent.sol";
 import {TradeLibrary} from "../../trade/TradeLibrary.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
+import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/BanComponent.sol";
+import {Banned} from "../../ban/BanSystem.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.shipnftbeforetokentransferhandler")
@@ -57,6 +59,14 @@ contract ShipNFTBeforeTokenTransferHandler is
     ) external {
         // Locked check if not minting
         if (from != address(0)) {
+            // Is not banned
+            if (
+                BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID))
+                    .getValue(EntityLibrary.addressToEntity(from)) == true
+            ) {
+                revert Banned();
+            }
+
             ILockingSystem lockingSystem = _lockingSystem();
             for (uint256 idx = 0; idx < batchSize; idx++) {
                 if (

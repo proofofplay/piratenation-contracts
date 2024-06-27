@@ -6,6 +6,8 @@ import {IERC20BeforeTokenTransferHandler} from "@proofofplay/erc721-extensions/s
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 import {TradeLicenseComponent, ID as TRADE_LICENSE_COMPONENT_ID} from "../../generated/components/TradeLicenseComponent.sol";
+import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/BanComponent.sol";
+import {Banned} from "../../ban/BanSystem.sol";
 import {TradeLibrary} from "../../trade/TradeLibrary.sol";
 
 uint256 constant ID = uint256(
@@ -38,30 +40,21 @@ contract GoldTokenBeforeTokenTransferHandler is
      * Before transfer hook for GameItems. Performs any trait checks needed before transfer
      *
      * @param from              From address
-     * @param to               To address
-     * @param amount         Amount to transfer
      */
     function beforeTokenTransfer(
         address, // tokenContract,
         address, // operator
         address from,
-        address to,
-        uint256 amount
+        address, // to,
+        uint256 // amount
     ) external view {
-        // Cannot transfer zero amount
-        if (amount == 0) {
-            revert ZeroAmount();
-        }
         if (from != address(0)) {
-            // Can burn PGLD
-            if (to != address(0)) {
-                // Check if wallet has TradeLicense
-                TradeLibrary.checkTradeLicense(
-                    TradeLicenseComponent(
-                        _gameRegistry.getComponent(TRADE_LICENSE_COMPONENT_ID)
-                    ),
-                    EntityLibrary.addressToEntity(from)
-                );
+            // Is not banned
+            if (
+                BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID))
+                    .getValue(EntityLibrary.addressToEntity(from)) == true
+            ) {
+                revert Banned();
             }
         }
     }

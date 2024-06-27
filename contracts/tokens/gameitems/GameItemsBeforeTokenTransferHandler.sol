@@ -5,12 +5,14 @@ import {IERC1155BeforeTokenTransferHandler} from "../IERC1155BeforeTokenTransfer
 import {GameRegistryConsumerUpgradeable, ITraitsProvider} from "../../GameRegistryConsumerUpgradeable.sol";
 import {SOULBOUND_TRAIT_ID} from "../../Constants.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
+import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/BanComponent.sol";
 import {TradeLicenseComponent, Layout as TradeLicenseComponentStruct, ID as TRADE_LICENSE_COMPONENT_ID} from "../../generated/components/TradeLicenseComponent.sol";
 import {TradeLicenseExemptComponent, Layout as TradeLicenseExemptComponentStruct, ID as TRADE_LICENSE_EXEMPT_COMPONENT_ID} from "../../generated/components/TradeLicenseExemptComponent.sol";
 import {TradeLibrary} from "../../trade/TradeLibrary.sol";
 import {TradeLicenseChecks} from "../TradeLicenseChecks.sol";
 import {ID as GAME_ITEMS_ID} from "./IGameItems.sol";
 import {TradeableGameItems, ID as TRADEABLE_GAME_ITEMS_ID} from "./TradeableGameItems.sol";
+import {Banned} from "../../ban/BanSystem.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.gameitemsbeforetokentransferhandler")
@@ -59,6 +61,14 @@ contract GameItemsBeforeTokenTransferHandler is
         bytes memory // data
     ) external {
         if (from != address(0)) {
+            // Check if user is banned
+            if (
+                BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID))
+                    .getValue(EntityLibrary.addressToEntity(from)) == true
+            ) {
+                revert Banned();
+            }
+
             // Check locked status of token and disallow transfer
             if (
                 _lockingSystem().canTransferItems(

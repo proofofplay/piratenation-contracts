@@ -16,6 +16,8 @@ import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../ITokenTem
 import {TradeLicenseChecks} from "../TradeLicenseChecks.sol";
 import {TokenReentrancyGuardUpgradable} from "../TokenReentrancyGuardUpgradable.sol";
 import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
+import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/BanComponent.sol";
+import {Banned} from "../../ban/BanSystem.sol";
 
 import {GAME_LOGIC_CONTRACT_ROLE, SOULBOUND_TRAIT_ID, MANAGER_ROLE} from "../../Constants.sol";
 
@@ -379,6 +381,14 @@ contract TradeableShipNFT is
 
     function _checkOwnership(uint256 tokenId) private view {
         address owner = _ownerOf(tokenId); // thist hrows invalid token if it's to 0
+        if (
+            BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID)).getValue(
+                EntityLibrary.addressToEntity(owner)
+            ) == true
+        ) {
+            revert Banned();
+        }
+
         address spender = _msgSender();
 
         if (!_isAuthorized(owner, spender, tokenId)) {

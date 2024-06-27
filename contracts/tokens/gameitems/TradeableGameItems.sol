@@ -21,6 +21,8 @@ import {TradeLicenseExemptComponent, ID as TRADE_LICENSE_EXEMPT_COMPONENT_ID} fr
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 import {TradeLibrary} from "../../trade/TradeLibrary.sol";
 import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
+import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/BanComponent.sol";
+import {Banned} from "../../ban/BanSystem.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.tradeablegameitems")
@@ -462,6 +464,14 @@ contract TradeableGameItems is
     function _checkOwnership(address from) internal view {
         if (_msgSender() != from && !_operatorApprovals[from][_msgSender()]) {
             revert ERC1155MissingApprovalForAll(_msgSender(), from);
+        }
+
+        if (
+            BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID)).getValue(
+                EntityLibrary.addressToEntity(from)
+            ) == true
+        ) {
+            revert Banned();
         }
     }
 
