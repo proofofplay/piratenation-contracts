@@ -79,10 +79,13 @@ contract PirateTransformRunnerSystem is BaseTransformRunnerSystem {
 
         // Spend energy if needed
         if (runnerConfig.energyRequired > 0) {
+            uint256 totalEnergyRequired = runnerConfig.energyRequired *
+                params.count;
+
             // Subtract energy from user wallet entity
             IEnergySystemV3(_getSystem(ENERGY_SYSTEM_ID)).spendEnergy(
                 EntityLibrary.addressToEntity(transformInstance.account),
-                runnerConfig.energyRequired
+                totalEnergyRequired
             );
         }
 
