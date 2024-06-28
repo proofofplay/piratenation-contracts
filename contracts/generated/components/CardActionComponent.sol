@@ -12,12 +12,8 @@ uint256 constant ID = uint256(
 );
 
 struct Layout {
-    uint8 actionType;
+    uint16 actionType;
     uint8 targetType;
-    uint16 effectValue;
-    uint8 durationTurns;
-    uint8 startCondition;
-    uint8 durationCondition;
 }
 
 library CardActionComponentStorage {
@@ -64,32 +60,16 @@ contract CardActionComponent is BaseStorageComponentV2 {
         override
         returns (string[] memory keys, TypesLibrary.SchemaValue[] memory values)
     {
-        keys = new string[](6);
-        values = new TypesLibrary.SchemaValue[](6);
+        keys = new string[](2);
+        values = new TypesLibrary.SchemaValue[](2);
 
         // Action type specific to the action such as damage, heal, draw
         keys[0] = "action_type";
-        values[0] = TypesLibrary.SchemaValue.UINT8;
+        values[0] = TypesLibrary.SchemaValue.UINT16;
 
         // Target type as defined as enum: self, opponent, aoe
         keys[1] = "target_type";
         values[1] = TypesLibrary.SchemaValue.UINT8;
-
-        // Effect value, ex. {10} damage or {15000} multiplier.
-        keys[2] = "effect_value";
-        values[2] = TypesLibrary.SchemaValue.UINT16;
-
-        // Effect duration in turns excluding current turn if instant
-        keys[3] = "duration_turns";
-        values[3] = TypesLibrary.SchemaValue.UINT8;
-
-        // Effect start condition defined as enum: instant, start_round end_round
-        keys[4] = "start_condition";
-        values[4] = TypesLibrary.SchemaValue.UINT8;
-
-        // If an effect is applied what is the condition that stops it
-        keys[5] = "duration_condition";
-        values[5] = TypesLibrary.SchemaValue.UINT8;
     }
 
     /**
@@ -111,31 +91,13 @@ contract CardActionComponent is BaseStorageComponentV2 {
      * @param entity Entity to get value for
      * @param actionType Action type specific to the action such as damage, heal, draw
      * @param targetType Target type as defined as enum: self, opponent, aoe
-     * @param effectValue Effect value, ex. {10} damage or {15000} multiplier.
-     * @param durationTurns Effect duration in turns excluding current turn if instant
-     * @param startCondition Effect start condition defined as enum: instant, start_round end_round
-     * @param durationCondition If an effect is applied what is the condition that stops it
      */
     function setValue(
         uint256 entity,
-        uint8 actionType,
-        uint8 targetType,
-        uint16 effectValue,
-        uint8 durationTurns,
-        uint8 startCondition,
-        uint8 durationCondition
+        uint16 actionType,
+        uint8 targetType
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        _setValue(
-            entity,
-            Layout(
-                actionType,
-                targetType,
-                effectValue,
-                durationTurns,
-                startCondition,
-                durationCondition
-            )
-        );
+        _setValue(entity, Layout(actionType, targetType));
     }
 
     /**
@@ -182,40 +144,17 @@ contract CardActionComponent is BaseStorageComponentV2 {
      * @param entity Entity to get value for
      * @return actionType Action type specific to the action such as damage, heal, draw
      * @return targetType Target type as defined as enum: self, opponent, aoe
-     * @return effectValue Effect value, ex. {10} damage or {15000} multiplier.
-     * @return durationTurns Effect duration in turns excluding current turn if instant
-     * @return startCondition Effect start condition defined as enum: instant, start_round end_round
-     * @return durationCondition If an effect is applied what is the condition that stops it
      */
     function getValue(
         uint256 entity
-    )
-        external
-        view
-        virtual
-        returns (
-            uint8 actionType,
-            uint8 targetType,
-            uint16 effectValue,
-            uint8 durationTurns,
-            uint8 startCondition,
-            uint8 durationCondition
-        )
-    {
+    ) external view virtual returns (uint16 actionType, uint8 targetType) {
         if (has(entity)) {
             Layout memory s = CardActionComponentStorage
                 .layout()
                 .entityIdToStruct[entity];
-            (
-                actionType,
-                targetType,
-                effectValue,
-                durationTurns,
-                startCondition,
-                durationCondition
-            ) = abi.decode(
+            (actionType, targetType) = abi.decode(
                 _getEncodedValues(s),
-                (uint8, uint8, uint16, uint8, uint8, uint8)
+                (uint16, uint8)
             );
         }
     }
@@ -234,13 +173,9 @@ contract CardActionComponent is BaseStorageComponentV2 {
         ];
 
         // ABI Encode all fields of the struct and add to values array
-        values = new bytes[](6);
+        values = new bytes[](2);
         values[0] = abi.encode(s.actionType);
         values[1] = abi.encode(s.targetType);
-        values[2] = abi.encode(s.effectValue);
-        values[3] = abi.encode(s.durationTurns);
-        values[4] = abi.encode(s.startCondition);
-        values[5] = abi.encode(s.durationCondition);
     }
 
     /**
@@ -269,14 +204,7 @@ contract CardActionComponent is BaseStorageComponentV2 {
         Layout memory s = CardActionComponentStorage.layout().entityIdToStruct[
             entity
         ];
-        (
-            s.actionType,
-            s.targetType,
-            s.effectValue,
-            s.durationTurns,
-            s.startCondition,
-            s.durationCondition
-        ) = abi.decode(value, (uint8, uint8, uint16, uint8, uint8, uint8));
+        (s.actionType, s.targetType) = abi.decode(value, (uint16, uint8));
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -300,16 +228,9 @@ contract CardActionComponent is BaseStorageComponentV2 {
             Layout memory s = CardActionComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
-            (
-                s.actionType,
-                s.targetType,
-                s.effectValue,
-                s.durationTurns,
-                s.startCondition,
-                s.durationCondition
-            ) = abi.decode(
+            (s.actionType, s.targetType) = abi.decode(
                 values[i],
-                (uint8, uint8, uint16, uint8, uint8, uint8)
+                (uint16, uint8)
             );
             _setValueToStorage(entities[i], s);
         }
@@ -365,40 +286,18 @@ contract CardActionComponent is BaseStorageComponentV2 {
 
         s.actionType = value.actionType;
         s.targetType = value.targetType;
-        s.effectValue = value.effectValue;
-        s.durationTurns = value.durationTurns;
-        s.startCondition = value.startCondition;
-        s.durationCondition = value.durationCondition;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
         _setValueToStorage(entity, value);
 
         // ABI Encode all native types of the struct
-        _emitSetBytes(
-            entity,
-            abi.encode(
-                value.actionType,
-                value.targetType,
-                value.effectValue,
-                value.durationTurns,
-                value.startCondition,
-                value.durationCondition
-            )
-        );
+        _emitSetBytes(entity, abi.encode(value.actionType, value.targetType));
     }
 
     function _getEncodedValues(
         Layout memory value
     ) internal pure returns (bytes memory) {
-        return
-            abi.encode(
-                value.actionType,
-                value.targetType,
-                value.effectValue,
-                value.durationTurns,
-                value.startCondition,
-                value.durationCondition
-            );
+        return abi.encode(value.actionType, value.targetType);
     }
 }

@@ -66,7 +66,7 @@ contract CardComponent is BaseStorageComponentV2 {
         keys[0] = "card_action_type";
         values[0] = TypesLibrary.SchemaValue.UINT8;
 
-        // Cost in mana/command points
+        // Cost in action points
         keys[1] = "point_cost";
         values[1] = TypesLibrary.SchemaValue.UINT8;
 
@@ -93,7 +93,7 @@ contract CardComponent is BaseStorageComponentV2 {
      *
      * @param entity Entity to get value for
      * @param cardActionType Card Action Type as defined: damage, manipulation, etc
-     * @param pointCost Cost in mana/command points
+     * @param pointCost Cost in action points
      * @param actionEntities Card actions entity ids that are used as part of the card
      */
     function setValue(
@@ -148,7 +148,7 @@ contract CardComponent is BaseStorageComponentV2 {
      *
      * @param entity Entity to get value for
      * @return cardActionType Card Action Type as defined: damage, manipulation, etc
-     * @return pointCost Cost in mana/command points
+     * @return pointCost Cost in action points
      * @return actionEntities Card actions entity ids that are used as part of the card
      */
     function getValue(

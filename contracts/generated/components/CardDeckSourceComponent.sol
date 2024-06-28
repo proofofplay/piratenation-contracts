@@ -8,7 +8,7 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.decksourcecomponent")
+    keccak256("game.piratenation.decksourcecomponent.v1")
 );
 
 struct Layout {
@@ -38,7 +38,7 @@ library CardDeckSourceComponentStorage {
 
 /**
  * @title CardDeckSourceComponent
- * @dev A collection of sources to assemble a deck.
+ * @dev Defines the source of where the decks are coming from
  */
 contract CardDeckSourceComponent is BaseStorageComponentV2 {
     /** SETUP **/
@@ -62,7 +62,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         keys = new string[](1);
         values = new TypesLibrary.SchemaValue[](1);
 
-        // The entities of deck sources
+        // Card decks that are part of this deck source
         keys[0] = "deck_entities";
         values[0] = TypesLibrary.SchemaValue.UINT256;
     }
@@ -84,7 +84,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param deckEntities The entities of deck sources
+     * @param deckEntities Card decks that are part of this deck source
      */
     function setValue(
         uint256 entity,
@@ -137,7 +137,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return deckEntities The entities of deck sources
+     * @return deckEntities Card decks that are part of this deck source
      */
     function getValue(
         uint256 entity

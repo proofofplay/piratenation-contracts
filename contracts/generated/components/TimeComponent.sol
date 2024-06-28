@@ -7,16 +7,13 @@ import {TypesLibrary} from "../../core/TypesLibrary.sol";
 import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/components/BaseStorageComponentV2.sol";
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
-uint256 constant ID = uint256(
-    keccak256("game.piratenation.carddeckcomponent.v1")
-);
+uint256 constant ID = uint256(keccak256("game.piratenation.timecomponent.v1"));
 
 struct Layout {
-    uint256[] cardEntities;
-    uint32[] unlockLevel;
+    uint256 value;
 }
 
-library CardDeckComponentStorage {
+library TimeComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -38,10 +35,10 @@ library CardDeckComponentStorage {
 }
 
 /**
- * @title CardDeckComponent
- * @dev Card Deck Component is a component that defines a list of cards attached to mobs, pirates and ships.
+ * @title TimeComponent
+ * @dev A time between 00:00:00 and 23:59:59 in seconds
  */
-contract CardDeckComponent is BaseStorageComponentV2 {
+contract TimeComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -60,16 +57,12 @@ contract CardDeckComponent is BaseStorageComponentV2 {
         override
         returns (string[] memory keys, TypesLibrary.SchemaValue[] memory values)
     {
-        keys = new string[](2);
-        values = new TypesLibrary.SchemaValue[](2);
+        keys = new string[](1);
+        values = new TypesLibrary.SchemaValue[](1);
 
-        // Collection of cards that are part of this deck
-        keys[0] = "card_entities";
-        values[0] = TypesLibrary.SchemaValue.UINT256_ARRAY;
-
-        // Level at which the cards are unlocked. Default is 0 and unlocked
-        keys[1] = "unlock_level";
-        values[1] = TypesLibrary.SchemaValue.UINT32_ARRAY;
+        // The time value in seconds. Between 0 and 86400 mapping to 00:00:00 and 23:59:59
+        keys[0] = "value";
+        values[0] = TypesLibrary.SchemaValue.UINT256;
     }
 
     /**
@@ -89,67 +82,13 @@ contract CardDeckComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param cardEntities Collection of cards that are part of this deck
-     * @param unlockLevel Level at which the cards are unlocked. Default is 0 and unlocked
+     * @param value The time value in seconds. Between 0 and 86400 mapping to 00:00:00 and 23:59:59
      */
     function setValue(
         uint256 entity,
-        uint256[] memory cardEntities,
-        uint32[] memory unlockLevel
+        uint256 value
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        _setValue(entity, Layout(cardEntities, unlockLevel));
-    }
-
-    /**
-     * Appends to the components.
-     *
-     * @param entity Entity to get value for
-     * @param values Layout to set for the given entity
-     */
-    function append(
-        uint256 entity,
-        Layout memory values
-    ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout storage s = CardDeckComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
-        for (uint256 i = 0; i < values.cardEntities.length; i++) {
-            s.cardEntities.push(values.cardEntities[i]);
-            s.unlockLevel.push(values.unlockLevel[i]);
-        }
-
-        // ABI Encode all native types of the struct
-        _emitSetBytes(entity, abi.encode(s.cardEntities, s.unlockLevel));
-    }
-
-    /**
-     * @dev Removes the value at a given index
-     * @param entity Entity to get value for
-     * @param index Index to remove
-     */
-    function removeValueAtIndex(
-        uint256 entity,
-        uint256 index
-    ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout storage s = CardDeckComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
-
-        // Get the last index
-        uint256 lastIndexInArray = s.cardEntities.length - 1;
-
-        // Move the last value to the index to pop
-        if (index != lastIndexInArray) {
-            s.cardEntities[index] = s.cardEntities[lastIndexInArray];
-            s.unlockLevel[index] = s.unlockLevel[lastIndexInArray];
-        }
-
-        // Pop the last value
-        s.cardEntities.pop();
-        s.unlockLevel.pop();
-
-        // ABI Encode all native types of the struct
-        _emitSetBytes(entity, abi.encode(s.cardEntities, s.unlockLevel));
+        _setValue(entity, Layout(value));
     }
 
     /**
@@ -187,32 +126,23 @@ contract CardDeckComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = CardDeckComponentStorage.layout().entityIdToStruct[entity];
+        value = TimeComponentStorage.layout().entityIdToStruct[entity];
     }
 
     /**
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return cardEntities Collection of cards that are part of this deck
-     * @return unlockLevel Level at which the cards are unlocked. Default is 0 and unlocked
+     * @return value The time value in seconds. Between 0 and 86400 mapping to 00:00:00 and 23:59:59
      */
     function getValue(
         uint256 entity
-    )
-        external
-        view
-        virtual
-        returns (uint256[] memory cardEntities, uint32[] memory unlockLevel)
-    {
+    ) external view virtual returns (uint256 value) {
         if (has(entity)) {
-            Layout memory s = CardDeckComponentStorage
-                .layout()
-                .entityIdToStruct[entity];
-            (cardEntities, unlockLevel) = abi.decode(
-                _getEncodedValues(s),
-                (uint256[], uint32[])
-            );
+            Layout memory s = TimeComponentStorage.layout().entityIdToStruct[
+                entity
+            ];
+            (value) = abi.decode(_getEncodedValues(s), (uint256));
         }
     }
 
@@ -225,14 +155,13 @@ contract CardDeckComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = CardDeckComponentStorage.layout().entityIdToStruct[
+        Layout storage s = TimeComponentStorage.layout().entityIdToStruct[
             entity
         ];
 
         // ABI Encode all fields of the struct and add to values array
-        values = new bytes[](2);
-        values[0] = abi.encode(s.cardEntities);
-        values[1] = abi.encode(s.unlockLevel);
+        values = new bytes[](1);
+        values[0] = abi.encode(s.value);
     }
 
     /**
@@ -243,7 +172,7 @@ contract CardDeckComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = CardDeckComponentStorage.layout().entityIdToStruct[
+        Layout memory s = TimeComponentStorage.layout().entityIdToStruct[
             entity
         ];
         value = _getEncodedValues(s);
@@ -258,13 +187,10 @@ contract CardDeckComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = CardDeckComponentStorage.layout().entityIdToStruct[
+        Layout memory s = TimeComponentStorage.layout().entityIdToStruct[
             entity
         ];
-        (s.cardEntities, s.unlockLevel) = abi.decode(
-            value,
-            (uint256[], uint32[])
-        );
+        (s.value) = abi.decode(value, (uint256));
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -285,13 +211,10 @@ contract CardDeckComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = CardDeckComponentStorage
-                .layout()
-                .entityIdToStruct[entities[i]];
-            (s.cardEntities, s.unlockLevel) = abi.decode(
-                values[i],
-                (uint256[], uint32[])
-            );
+            Layout memory s = TimeComponentStorage.layout().entityIdToStruct[
+                entities[i]
+            ];
+            (s.value) = abi.decode(values[i], (uint256));
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -307,7 +230,7 @@ contract CardDeckComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete CardDeckComponentStorage.layout().entityIdToStruct[entity];
+        delete TimeComponentStorage.layout().entityIdToStruct[entity];
         _emitRemoveBytes(entity);
     }
 
@@ -321,9 +244,7 @@ contract CardDeckComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete CardDeckComponentStorage.layout().entityIdToStruct[
-                entities[i]
-            ];
+            delete TimeComponentStorage.layout().entityIdToStruct[entities[i]];
         }
         _emitBatchRemoveBytes(entities);
     }
@@ -340,27 +261,23 @@ contract CardDeckComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = CardDeckComponentStorage.layout().entityIdToStruct[
+        Layout storage s = TimeComponentStorage.layout().entityIdToStruct[
             entity
         ];
 
-        s.cardEntities = value.cardEntities;
-        s.unlockLevel = value.unlockLevel;
+        s.value = value.value;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
         _setValueToStorage(entity, value);
 
         // ABI Encode all native types of the struct
-        _emitSetBytes(
-            entity,
-            abi.encode(value.cardEntities, value.unlockLevel)
-        );
+        _emitSetBytes(entity, abi.encode(value.value));
     }
 
     function _getEncodedValues(
         Layout memory value
     ) internal pure returns (bytes memory) {
-        return abi.encode(value.cardEntities, value.unlockLevel);
+        return abi.encode(value.value);
     }
 }

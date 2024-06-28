@@ -31,6 +31,12 @@ interface ITokenShop {
         uint256[] calldata skuEntities,
         uint256[] calldata quantities
     ) external returns (uint256 purchaseId, uint256 total);
+
+    function purchaseFromAuction(
+        address purchaser,
+        uint256 sku,
+        uint256 amount
+    ) external returns (uint256 purchaseId, uint256 total);
 }
 
 // @notice Emitted when purchasing from stake and an invalid Stake Contract is set
@@ -47,6 +53,9 @@ error MaxItemsExceeded();
 
 // @notice Emitted when the skus are not in order - this is required to prevent people from avoiding the MaxItemsLimit.
 error SkusMustBeInOrder();
+
+// @notice Emitted when is not purchaseable because Auction
+error MustBePurchasedByAuction();
 
 /**
  * The Pirate Token shop is a contract that allows users to purchase items using an ERC20 token.
@@ -94,6 +103,12 @@ contract PirateTokenShop is
 
     // @notice The mapping of SKU entities to their Sku struct
     mapping(uint256 => Sku) public skus;
+
+    // @notice If the SKU is an auction or not.
+    mapping(uint256 => bool) public auctionable;
+
+    // @notice the address of the public auction contract
+    address public auctionContract;
 
     // @notice Emitted when a purchase is made
     event Purchase(
@@ -148,6 +163,16 @@ contract PirateTokenShop is
     }
 
     /**
+     * @dev Update the auction contract address
+     * @param _auctionContract the address of the auction contract
+     */
+    function updateAuctionContract(
+        address _auctionContract
+    ) external onlyRole(MANAGER_ROLE) {
+        auctionContract = _auctionContract;
+    }
+
+    /**
      * @dev Withdraw the tokens from the contract
      * @param amount The amount of tokens to withdraw
      * @notice The funds reciever is the address that receives the funds from the purchases
@@ -171,7 +196,8 @@ contract PirateTokenShop is
         uint256[] calldata skuEntities,
         uint256[] calldata price,
         uint32[] calldata quantities,
-        bool[] calldata unlimited
+        bool[] calldata unlimited,
+        bool[] calldata isAuction
     ) external onlyRole(LISTINGS_ROLE) {
         if (
             skuEntities.length != price.length ||
@@ -183,6 +209,7 @@ contract PirateTokenShop is
 
         for (uint256 i = 0; i < skuEntities.length; i++) {
             skus[skuEntities[i]] = Sku(price[i], quantities[i], unlimited[i]);
+            auctionable[skuEntities[i]] = isAuction[i];
         }
     }
 
@@ -347,6 +374,10 @@ contract PirateTokenShop is
                 revert SkusMustBeInOrder();
             }
 
+            if (auctionable[skuEntities[i]]) {
+                revert MustBePurchasedByAuction();
+            }
+
             Sku storage sku = skus[skuEntities[i]];
             totalQuantity += quantities[i];
             uint256 purchaseQuantity = quantities[i];
@@ -392,5 +423,41 @@ contract PirateTokenShop is
         );
 
         return (purchaseId, total);
+    }
+
+    /**
+     * The auctioneer can make purchases
+     *
+     * @param purchaser the address of the auction winner
+     * @param sku the sku that will be delivered
+     * @param amount the amount they won the auction for
+     */
+    function purchaseFromAuction(
+        address purchaser,
+        uint256 sku,
+        uint256 amount
+    ) public returns (uint256, uint256) {
+        if (msg.sender != auctionContract) {
+            revert MustBePurchasedByAuction();
+        }
+
+        purchaseId++;
+
+        uint256[] memory skuEntities = new uint256[](1);
+        skuEntities[0] = sku;
+
+        uint256[] memory quantities = new uint256[](1);
+        quantities[0] = 1;
+
+        emit Purchase(
+            purchaser,
+            purchaseId,
+            skuEntities,
+            quantities,
+            amount,
+            0
+        );
+
+        return (purchaseId, amount);
     }
 }
