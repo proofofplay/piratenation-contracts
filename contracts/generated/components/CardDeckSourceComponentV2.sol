@@ -15,7 +15,7 @@ struct Layout {
     uint256[] deckEntities;
 }
 
-library CardDeckSourceComponentStorage {
+library CardDeckSourceComponentV2Storage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -37,10 +37,10 @@ library CardDeckSourceComponentStorage {
 }
 
 /**
- * @title CardDeckSourceComponent
+ * @title CardDeckSourceComponentV2
  * @dev Defines the source of where the decks are coming from
  */
-contract CardDeckSourceComponent is BaseStorageComponentV2 {
+contract CardDeckSourceComponentV2 is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -103,7 +103,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity,
         Layout memory values
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout storage s = CardDeckSourceComponentStorage
+        Layout storage s = CardDeckSourceComponentV2Storage
             .layout()
             .entityIdToStruct[entity];
         for (uint256 i = 0; i < values.deckEntities.length; i++) {
@@ -123,7 +123,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity,
         uint256 index
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout storage s = CardDeckSourceComponentStorage
+        Layout storage s = CardDeckSourceComponentV2Storage
             .layout()
             .entityIdToStruct[entity];
 
@@ -177,7 +177,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = CardDeckSourceComponentStorage.layout().entityIdToStruct[
+        value = CardDeckSourceComponentV2Storage.layout().entityIdToStruct[
             entity
         ];
     }
@@ -192,7 +192,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (uint256[] memory deckEntities) {
         if (has(entity)) {
-            Layout memory s = CardDeckSourceComponentStorage
+            Layout memory s = CardDeckSourceComponentV2Storage
                 .layout()
                 .entityIdToStruct[entity];
             (deckEntities) = abi.decode(_getEncodedValues(s), (uint256[]));
@@ -208,7 +208,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = CardDeckSourceComponentStorage
+        Layout storage s = CardDeckSourceComponentV2Storage
             .layout()
             .entityIdToStruct[entity];
 
@@ -225,7 +225,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = CardDeckSourceComponentStorage
+        Layout memory s = CardDeckSourceComponentV2Storage
             .layout()
             .entityIdToStruct[entity];
         value = _getEncodedValues(s);
@@ -240,7 +240,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = CardDeckSourceComponentStorage
+        Layout memory s = CardDeckSourceComponentV2Storage
             .layout()
             .entityIdToStruct[entity];
         (s.deckEntities) = abi.decode(value, (uint256[]));
@@ -264,7 +264,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = CardDeckSourceComponentStorage
+            Layout memory s = CardDeckSourceComponentV2Storage
                 .layout()
                 .entityIdToStruct[entities[i]];
             (s.deckEntities) = abi.decode(values[i], (uint256[]));
@@ -283,7 +283,9 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete CardDeckSourceComponentStorage.layout().entityIdToStruct[entity];
+        delete CardDeckSourceComponentV2Storage.layout().entityIdToStruct[
+            entity
+        ];
         _emitRemoveBytes(entity);
     }
 
@@ -297,7 +299,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete CardDeckSourceComponentStorage.layout().entityIdToStruct[
+            delete CardDeckSourceComponentV2Storage.layout().entityIdToStruct[
                 entities[i]
             ];
         }
@@ -316,7 +318,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = CardDeckSourceComponentStorage
+        Layout storage s = CardDeckSourceComponentV2Storage
             .layout()
             .entityIdToStruct[entity];
 

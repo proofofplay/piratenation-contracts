@@ -32,11 +32,11 @@ interface ITokenShop {
         uint256[] calldata quantities
     ) external returns (uint256 purchaseId, uint256 total);
 
-    function purchaseFromAuction(
-        address purchaser,
-        uint256 sku,
-        uint256 amount
-    ) external returns (uint256 purchaseId, uint256 total);
+    // function purchaseFromAuction(
+    //     address purchaser,
+    //     uint256 sku,
+    //     uint256 amount
+    // ) external returns (uint256 purchaseId, uint256 total);
 }
 
 // @notice Emitted when purchasing from stake and an invalid Stake Contract is set
@@ -196,8 +196,7 @@ contract PirateTokenShop is
         uint256[] calldata skuEntities,
         uint256[] calldata price,
         uint32[] calldata quantities,
-        bool[] calldata unlimited,
-        bool[] calldata isAuction
+        bool[] calldata unlimited
     ) external onlyRole(LISTINGS_ROLE) {
         if (
             skuEntities.length != price.length ||
@@ -209,7 +208,7 @@ contract PirateTokenShop is
 
         for (uint256 i = 0; i < skuEntities.length; i++) {
             skus[skuEntities[i]] = Sku(price[i], quantities[i], unlimited[i]);
-            auctionable[skuEntities[i]] = isAuction[i];
+            //auctionable[skuEntities[i]] = isAuction[i];
         }
     }
 
@@ -374,9 +373,9 @@ contract PirateTokenShop is
                 revert SkusMustBeInOrder();
             }
 
-            if (auctionable[skuEntities[i]]) {
-                revert MustBePurchasedByAuction();
-            }
+            // if (auctionable[skuEntities[i]]) {
+            //     revert MustBePurchasedByAuction();
+            // }
 
             Sku storage sku = skus[skuEntities[i]];
             totalQuantity += quantities[i];
@@ -432,32 +431,32 @@ contract PirateTokenShop is
      * @param sku the sku that will be delivered
      * @param amount the amount they won the auction for
      */
-    function purchaseFromAuction(
-        address purchaser,
-        uint256 sku,
-        uint256 amount
-    ) public returns (uint256, uint256) {
-        if (msg.sender != auctionContract) {
-            revert MustBePurchasedByAuction();
-        }
+    // function purchaseFromAuction(
+    //     address purchaser,
+    //     uint256 sku,
+    //     uint256 amount
+    // ) public returns (uint256, uint256) {
+    //     if (msg.sender != auctionContract) {
+    //         revert MustBePurchasedByAuction();
+    //     }
 
-        purchaseId++;
+    //     purchaseId++;
 
-        uint256[] memory skuEntities = new uint256[](1);
-        skuEntities[0] = sku;
+    //     uint256[] memory skuEntities = new uint256[](1);
+    //     skuEntities[0] = sku;
 
-        uint256[] memory quantities = new uint256[](1);
-        quantities[0] = 1;
+    //     uint256[] memory quantities = new uint256[](1);
+    //     quantities[0] = 1;
 
-        emit Purchase(
-            purchaser,
-            purchaseId,
-            skuEntities,
-            quantities,
-            amount,
-            0
-        );
+    //     emit Purchase(
+    //         purchaser,
+    //         purchaseId,
+    //         skuEntities,
+    //         quantities,
+    //         amount,
+    //         0
+    //     );
 
-        return (purchaseId, amount);
-    }
+    //     return (purchaseId, amount);
+    // }
 }

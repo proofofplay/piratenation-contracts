@@ -74,7 +74,7 @@ interface IPirateAuction {
 
     event AuctionTreasuryUpdated(address treasury);
 
-    function settleAuction() external;
+    //function settleAuction() external;
 
     function createBid(uint256 sku, uint256 amount) external;
 }
@@ -153,9 +153,9 @@ contract PirateAuction is
     /**
      * @notice Settle the current auction.
      */
-    function settleAuction() external override whenNotPaused nonReentrant {
-        _settleAuction();
-    }
+    // function settleAuction() external override whenNotPaused nonReentrant {
+    //     _settleAuction();
+    // }
 
     /**
      * createBidWithPermit
@@ -343,31 +343,31 @@ contract PirateAuction is
      * @notice Settle an auction, finalizing the bid and paying out to the owner.
      * @dev If there are no bids, the token is sent to the treasury.
      */
-    function _settleAuction() internal {
-        IPirateAuction.Auction memory _auction = auction;
+    // function _settleAuction() internal {
+    //     IPirateAuction.Auction memory _auction = auction;
 
-        require(_auction.startTime != 0, "Auction hasn't begun");
-        require(!_auction.settled, "Auction has already been settled");
-        require(
-            block.timestamp >= _auction.endTime,
-            "Auction hasn't completed"
-        );
+    //     require(_auction.startTime != 0, "Auction hasn't begun");
+    //     require(!_auction.settled, "Auction has already been settled");
+    //     require(
+    //         block.timestamp >= _auction.endTime,
+    //         "Auction hasn't completed"
+    //     );
 
-        auction.settled = true;
+    //     auction.settled = true;
 
-        if (_auction.bidder != address(0)) {
-            //todo: Apply the purchase from Stake discount.
-            shop.purchaseFromAuction(
-                _auction.bidder,
-                _auction.sku,
-                _auction.amount
-            );
-        }
+    //     if (_auction.bidder != address(0)) {
+    //         //todo: Apply the purchase from Stake discount.
+    //         shop.purchaseFromAuction(
+    //             _auction.bidder,
+    //             _auction.sku,
+    //             _auction.amount
+    //         );
+    //     }
 
-        if (_auction.amount > 0) {
-            token.transfer(treasury, _auction.amount);
-        }
+    //     if (_auction.amount > 0) {
+    //         token.transfer(treasury, _auction.amount);
+    //     }
 
-        emit AuctionSettled(_auction.sku, _auction.bidder, _auction.amount);
-    }
+    //     emit AuctionSettled(_auction.sku, _auction.bidder, _auction.amount);
+    // }
 }

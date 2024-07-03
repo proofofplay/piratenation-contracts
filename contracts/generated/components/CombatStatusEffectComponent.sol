@@ -290,8 +290,8 @@ contract CombatStatusEffectComponent is BaseStorageComponentV2 {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
             delete CombatStatusEffectComponentStorage.layout().entityIdToStruct[
-                    entities[i]
-                ];
+                entities[i]
+            ];
         }
         _emitBatchRemoveBytes(entities);
     }

@@ -8,14 +8,14 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.decksourcecomponent.v2")
+    keccak256("game.piratenation.avatarbaseheadwearcomponent.v1")
 );
 
 struct Layout {
-    uint256[] deckEntities;
+    uint256 value;
 }
 
-library CardDeckSourceComponentStorage {
+library AvatarBaseHeadwearComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -37,10 +37,10 @@ library CardDeckSourceComponentStorage {
 }
 
 /**
- * @title CardDeckSourceComponent
- * @dev Defines the source of where the decks are coming from
+ * @title AvatarBaseHeadwearComponent
+ * @dev The base headwear of the avatar
  */
-contract CardDeckSourceComponent is BaseStorageComponentV2 {
+contract AvatarBaseHeadwearComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -62,9 +62,9 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         keys = new string[](1);
         values = new TypesLibrary.SchemaValue[](1);
 
-        // Card decks that are part of this deck source
-        keys[0] = "deck_entities";
-        values[0] = TypesLibrary.SchemaValue.UINT256_ARRAY;
+        // Entity that has the headwear information for this entity&#39;s avatar
+        keys[0] = "value";
+        values[0] = TypesLibrary.SchemaValue.UINT256;
     }
 
     /**
@@ -84,62 +84,13 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param deckEntities Card decks that are part of this deck source
+     * @param value Entity that has the headwear information for this entity&#39;s avatar
      */
     function setValue(
         uint256 entity,
-        uint256[] memory deckEntities
+        uint256 value
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        _setValue(entity, Layout(deckEntities));
-    }
-
-    /**
-     * Appends to the components.
-     *
-     * @param entity Entity to get value for
-     * @param values Layout to set for the given entity
-     */
-    function append(
-        uint256 entity,
-        Layout memory values
-    ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout storage s = CardDeckSourceComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
-        for (uint256 i = 0; i < values.deckEntities.length; i++) {
-            s.deckEntities.push(values.deckEntities[i]);
-        }
-
-        // ABI Encode all native types of the struct
-        _emitSetBytes(entity, abi.encode(s.deckEntities));
-    }
-
-    /**
-     * @dev Removes the value at a given index
-     * @param entity Entity to get value for
-     * @param index Index to remove
-     */
-    function removeValueAtIndex(
-        uint256 entity,
-        uint256 index
-    ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout storage s = CardDeckSourceComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
-
-        // Get the last index
-        uint256 lastIndexInArray = s.deckEntities.length - 1;
-
-        // Move the last value to the index to pop
-        if (index != lastIndexInArray) {
-            s.deckEntities[index] = s.deckEntities[lastIndexInArray];
-        }
-
-        // Pop the last value
-        s.deckEntities.pop();
-
-        // ABI Encode all native types of the struct
-        _emitSetBytes(entity, abi.encode(s.deckEntities));
+        _setValue(entity, Layout(value));
     }
 
     /**
@@ -177,7 +128,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = CardDeckSourceComponentStorage.layout().entityIdToStruct[
+        value = AvatarBaseHeadwearComponentStorage.layout().entityIdToStruct[
             entity
         ];
     }
@@ -186,16 +137,16 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return deckEntities Card decks that are part of this deck source
+     * @return value Entity that has the headwear information for this entity&#39;s avatar
      */
     function getValue(
         uint256 entity
-    ) external view virtual returns (uint256[] memory deckEntities) {
+    ) external view virtual returns (uint256 value) {
         if (has(entity)) {
-            Layout memory s = CardDeckSourceComponentStorage
+            Layout memory s = AvatarBaseHeadwearComponentStorage
                 .layout()
                 .entityIdToStruct[entity];
-            (deckEntities) = abi.decode(_getEncodedValues(s), (uint256[]));
+            (value) = abi.decode(_getEncodedValues(s), (uint256));
         }
     }
 
@@ -208,13 +159,13 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = CardDeckSourceComponentStorage
+        Layout storage s = AvatarBaseHeadwearComponentStorage
             .layout()
             .entityIdToStruct[entity];
 
         // ABI Encode all fields of the struct and add to values array
         values = new bytes[](1);
-        values[0] = abi.encode(s.deckEntities);
+        values[0] = abi.encode(s.value);
     }
 
     /**
@@ -225,7 +176,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = CardDeckSourceComponentStorage
+        Layout memory s = AvatarBaseHeadwearComponentStorage
             .layout()
             .entityIdToStruct[entity];
         value = _getEncodedValues(s);
@@ -240,10 +191,10 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = CardDeckSourceComponentStorage
+        Layout memory s = AvatarBaseHeadwearComponentStorage
             .layout()
             .entityIdToStruct[entity];
-        (s.deckEntities) = abi.decode(value, (uint256[]));
+        (s.value) = abi.decode(value, (uint256));
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -264,10 +215,10 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = CardDeckSourceComponentStorage
+            Layout memory s = AvatarBaseHeadwearComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
-            (s.deckEntities) = abi.decode(values[i], (uint256[]));
+            (s.value) = abi.decode(values[i], (uint256));
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -283,7 +234,9 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete CardDeckSourceComponentStorage.layout().entityIdToStruct[entity];
+        delete AvatarBaseHeadwearComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
         _emitRemoveBytes(entity);
     }
 
@@ -297,7 +250,7 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete CardDeckSourceComponentStorage.layout().entityIdToStruct[
+            delete AvatarBaseHeadwearComponentStorage.layout().entityIdToStruct[
                 entities[i]
             ];
         }
@@ -316,23 +269,23 @@ contract CardDeckSourceComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = CardDeckSourceComponentStorage
+        Layout storage s = AvatarBaseHeadwearComponentStorage
             .layout()
             .entityIdToStruct[entity];
 
-        s.deckEntities = value.deckEntities;
+        s.value = value.value;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
         _setValueToStorage(entity, value);
 
         // ABI Encode all native types of the struct
-        _emitSetBytes(entity, abi.encode(value.deckEntities));
+        _emitSetBytes(entity, abi.encode(value.value));
     }
 
     function _getEncodedValues(
         Layout memory value
     ) internal pure returns (bytes memory) {
-        return abi.encode(value.deckEntities);
+        return abi.encode(value.value);
     }
 }
