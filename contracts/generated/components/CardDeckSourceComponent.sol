@@ -8,7 +8,7 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.decksourcecomponent.v2")
+    keccak256("game.piratenation.decksourcecomponent.v3")
 );
 
 struct Layout {
