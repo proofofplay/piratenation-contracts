@@ -11,7 +11,7 @@ import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSy
 import {Layout as TransformP3R1} from "../generated/components/TransformP3R1Component.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {OwnerSystem} from "../core/OwnerSystem.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {IGameItems} from "../tokens/gameitems/IGameItems.sol";
 import {SceneObjectParams, ISceneSystem} from "./ISceneSystem.sol";
 import {PlaceableSceneObjectSystem, ID as PLACEABLE_SCENE_OBJECT_SYSTEM_ID} from "./PlaceableSceneObjectSystem.sol";
@@ -26,7 +26,7 @@ uint256 constant ID = uint256(keccak256("game.piratenation.scenesystem"));
 
 // Game Global with minimum time.
 uint256 constant SCENE_PLACEMENT_COOLDOWN_SECS = uint256(
-    keccak256("scene.placement_cooldown_secs")
+    keccak256("game.piratenation.global.scene.placement_cooldown_secs")
 );
 
 // Key for Cooldown System per account.
@@ -338,8 +338,11 @@ abstract contract SceneSystem is OwnerSystem, ISceneSystem {
      * @param account Account of the player
      */
     function _validateCooldown(address account) internal {
+
         uint32 scenePlacementCooldownLimit = uint32(
-            IGameGlobals(_getSystem(GAME_GLOBALS_ID)).getUint256(
+            Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        ).getValue(
                 SCENE_PLACEMENT_COOLDOWN_SECS
             )
         );

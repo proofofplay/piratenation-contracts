@@ -13,9 +13,9 @@ import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {IEnergySystemV3, ID} from "./IEnergySystem.sol";
 
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
 import "../GameRegistryConsumerUpgradeable.sol";
 import {EnergyComponent, Layout as EnergyComponentLayout, ID as ENERGY_COMPONENT_ID} from "../generated/components/EnergyComponent.sol";
+import {Uint256Component, ID as Uint256ComponentId} from "../generated/components/Uint256Component.sol";
 import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_LIST_COMPONENT_ID} from "../generated/components/EntityListComponent.sol";
 import {EnergyPackCountComponent, ID as ENERGY_PACK_COUNT_COMPONENT_ID} from "../generated/components/EnergyPackCountComponent.sol";
 import {EnergyPackComponent, Layout as EnergyPackComponentLayout, ID as ENERGY_PACK_COMPONENT_ID} from "../generated/components/EnergyPackComponent.sol";
@@ -30,7 +30,7 @@ uint256 constant ENERGY_EARNABLE_REGEN_SECS = 3600;
 
 // GameGlobals key for the daily energy amount per wallet
 uint256 constant DAILY_ENERGY_AMOUNT_ID = uint256(
-    keccak256("daily_energy_amount")
+    keccak256("game.piratenation.global.daily_energy_amount")
 );
 
 // Daily energy regen time value
@@ -38,15 +38,15 @@ uint256 constant DAILY_ENERGY_REGEN_SECS = 3600;
 
 // GameGlobals key for the daily energy regen amount per time value of DAILY_ENERGY_REGEN_SECS
 uint256 constant DAILY_ENERGY_REGEN_AMOUNT_ID = uint256(
-    keccak256("daily_energy_regen_amount")
+    keccak256("game.piratenation.global.daily_energy_regen_amount")
 );
 
 uint256 constant MAX_ENERGY_EARNABLE_ID = uint256(
-    keccak256("max_energy_earnable")
+    keccak256("game.piratenation.global.max_energy_earnable")
 );
 
 uint256 constant ENERGY_EARNABLE_RATE = uint256(
-    keccak256("energy_earnable_rate")
+    keccak256("game.piratenation.global.energy_earnable_rate")
 );
 
 /**
@@ -379,6 +379,7 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
     function _maxEnergy(uint256 entity) internal view returns (uint256) {
         // Unpack account wallet address
         address accountAddress = EntityLibrary.entityToAddress(entity);
+
         // If user owns zero Gen0 pirates and zero Gen1 pirates then return 0 energy
         if (
             IERC721(_getSystem(PIRATE_NFT_ID)).balanceOf(accountAddress) == 0 &&
@@ -391,18 +392,16 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
         }
         // Return DAILY_ENERGY_AMOUNT_ID globals value
         return
-            IGameGlobals(_getSystem(GAME_GLOBALS_ID)).getUint256(
-                DAILY_ENERGY_AMOUNT_ID
-            );
+            Uint256Component(
+            _gameRegistry.getComponent(Uint256ComponentId)
+        ).getValue(DAILY_ENERGY_AMOUNT_ID);
     }
 
     function _energyRegenPerSecond() internal view returns (uint256) {
-        IGameGlobals gameGlobals = IGameGlobals(_getSystem(GAME_GLOBALS_ID));
-
         // Get daily energy regeneration amount (ex: 6.25)
-        uint256 dailyEnergyRegenAmount = gameGlobals.getUint256(
-            DAILY_ENERGY_REGEN_AMOUNT_ID
-        );
+        uint256 dailyEnergyRegenAmount = Uint256Component(
+            _gameRegistry.getComponent(Uint256ComponentId)
+        ).getValue(DAILY_ENERGY_REGEN_AMOUNT_ID);
 
         // Return ether energy unit per hour
         return dailyEnergyRegenAmount / DAILY_ENERGY_REGEN_SECS;
@@ -468,17 +467,19 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
 
     function _maxEnergyEarnable() internal view returns (uint256) {
         // Return DAILY_ENERGY_AMOUNT_ID globals value
-        return
-            IGameGlobals(_getSystem(GAME_GLOBALS_ID)).getUint256(
+        return Uint256Component(
+            _gameRegistry.getComponent(Uint256ComponentId)
+        ).getValue(
                 MAX_ENERGY_EARNABLE_ID
             );
     }
 
     function _energyEarnableRegenPerSecond() internal view returns (uint256) {
-        IGameGlobals gameGlobals = IGameGlobals(_getSystem(GAME_GLOBALS_ID));
 
         // Regen 1 ether per hour
-        uint256 earnableEnergyAmount = gameGlobals.getUint256(
+        uint256 earnableEnergyAmount = Uint256Component(
+            _gameRegistry.getComponent(Uint256ComponentId)
+        ).getValue(
             ENERGY_EARNABLE_RATE
         );
 

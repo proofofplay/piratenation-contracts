@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "../GameRegistryConsumerUpgradeable.sol";
 
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {ILootSystem, ID as LOOT_SYSTEM_ID} from "../loot/ILootSystem.sol";
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 import {RANDOMIZER_ROLE} from "../Constants.sol";
@@ -30,7 +30,7 @@ uint256 constant ID = uint256(keccak256("game.piratenation.dungeonsystem.v3"));
 // The margin of time (in seconds) the user has to complete a dungeon after
 // starting it and after the dungeon's end point as past.
 uint256 constant DAILY_DUNGEONS_EXTRA_TIME_TO_COMPLETE = uint256(
-    keccak256("daily_dungeons.extra_time_to_complete")
+    keccak256("game.piratenation.global.daily_dungeons.extra_time_to_complete")
 );
 
 // Struct to track and respond to VRF requests
@@ -276,10 +276,11 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
      * @inheritdoc IDungeonSystemV3
      */
     function getExtraTimeForDungeonCompletion() public view returns (uint256) {
-        return
-            IGameGlobals(_getSystem(GAME_GLOBALS_ID)).getUint256(
-                DAILY_DUNGEONS_EXTRA_TIME_TO_COMPLETE
-            );
+        return Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        ).getValue(
+            DAILY_DUNGEONS_EXTRA_TIME_TO_COMPLETE
+        );
     }
 
     /**

@@ -10,9 +10,9 @@ import {ID as SHIP_COMBATABLE_ID} from "../combat/ShipCombatable.sol";
 import {ID as MOB_COMBATABLE_ID} from "../combat/MobCombatable.sol";
 import {CoreMoveSystem, ID as CORE_MOVE_SYSTEM_ID} from "../combat/CoreMoveSystem.sol";
 import {GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
 import {ShipEquipment, ID as SHIP_EQUIPMENT_ID} from "../equipment/ShipEquipment.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 import {EndBattleParams, IDungeonBattleSystemV2, ID} from "./IDungeonBattleSystemV2.sol";
 import {StartDungeonBattleParams, DungeonTrigger, DungeonNode} from "./IDungeonSystemV3.sol";
@@ -25,7 +25,7 @@ uint256 constant DUNGEON_BATTLE_COOLDOWN_ID = uint256(
 
 // Time limit for valid active battles to complete in seconds
 uint256 constant DUNGEON_BATTLE_TIME_LIMIT = uint256(
-    keccak256("dungeon_battle.time_limit")
+    keccak256("game.piratenation.global.dungeon_battle.time_limit")
 );
 
 /**
@@ -114,11 +114,9 @@ contract DungeonBattleSystemV2 is CoreBattleSystem, IDungeonBattleSystemV2 {
             battleEntity,
             DUNGEON_BATTLE_COOLDOWN_ID,
             uint32(
-                IGameGlobals(_getSystem(GAME_GLOBALS_ID)).getUint256(
-                    DUNGEON_BATTLE_TIME_LIMIT
-                )
-            )
-        );
+                Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        ).getValue(DUNGEON_BATTLE_TIME_LIMIT)));
 
         // We don't need to restrict number of battles started here,
         // that should be handled in the calling contract

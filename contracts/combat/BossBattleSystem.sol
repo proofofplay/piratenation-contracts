@@ -6,7 +6,7 @@ import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSy
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {ID as COUNTING_SYSTEM_ID, ICountingSystem} from "../counting/ICountingSystem.sol";
 import {ShipEquipment, ID as SHIP_EQUIPMENT_ID} from "../equipment/ShipEquipment.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol"; // DELETE?
 import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 

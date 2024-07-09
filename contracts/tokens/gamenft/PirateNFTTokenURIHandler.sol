@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import {ContractTraits} from "../ContractTraits.sol";
 import {ITokenURIHandler} from "../ITokenURIHandler.sol";
 import {MANAGER_ROLE, ELEMENTAL_AFFINITY_TRAIT_ID, EXPERTISE_TRAIT_ID} from "../../Constants.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../../gameglobals/IGameGlobals.sol";
+import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../../generated/components/StringArrayComponent.sol";
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
 import {IHoldingSystem, ID as HOLDING_SYSTEM_ID} from "../../holding/IHoldingSystem.sol";
 import {ITraitsConsumer} from "../../interfaces/ITraitsConsumer.sol";
@@ -90,10 +90,12 @@ contract PirateNFTTokenURIHandler is
             _getSystem(HOLDING_SYSTEM_ID)
         );
 
+        StringArrayComponent stringArrayComponent = StringArrayComponent(
+            _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
+        );
+
         // Fetch voxel pirate image URIs
-        string[] memory baseImageURIs = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getStringArray(PIRATE_NFT_IMAGES_ENHANCED_ID);
+        string[] memory baseImageURIs = stringArrayComponent.getValue(PIRATE_NFT_IMAGES_ENHANCED_ID);
 
         string memory imageUri = string.concat(
             baseImageURIs[uint256(TokenTypeImage.IMAGE)],
@@ -354,14 +356,16 @@ contract PirateNFTTokenURIHandler is
         ) {
             return abi.encode("");
         }
+
+
         uint256 affinityId = traitsProvider.getTraitUint256(
             tokenContract,
             tokenId,
             ELEMENTAL_AFFINITY_TRAIT_ID
         );
-        string[] memory affinitiesArray = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getStringArray(ELEMENTAL_AFFINITIES);
+        string[] memory affinitiesArray = StringArrayComponent(
+            _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
+        ).getValue(ELEMENTAL_AFFINITIES);
         string memory elementalAffinity = affinitiesArray[affinityId - 1];
         return abi.encode(elementalAffinity);
     }
@@ -380,14 +384,17 @@ contract PirateNFTTokenURIHandler is
         ) {
             return abi.encode("");
         }
+
+        StringArrayComponent stringArrayComponent = StringArrayComponent(
+            _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
+        );
+
         uint256 expertiseId = _traitsProvider().getTraitUint256(
             tokenContract,
             tokenId,
             EXPERTISE_TRAIT_ID
         );
-        string[] memory expertiseArray = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getStringArray(EXPERTISE_VALUES);
+        string[] memory expertiseArray = stringArrayComponent.getValue(EXPERTISE_VALUES);
         string memory expertise = expertiseArray[expertiseId - 1];
         return abi.encode(expertise);
     }

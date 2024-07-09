@@ -7,7 +7,8 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ILevelSystem, ID} from "./ILevelSystem.sol";
 import {IGameCurrency} from "../tokens/IGameCurrency.sol";
 import {ID as GOLD_TOKEN_STRATEGY_ID} from "../tokens/goldtoken/GoldTokenStrategy.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
+import {Uint256ArrayComponent, ID as UINT256_ARRAY_COMPONENT_ID} from "../generated/components/Uint256ArrayComponent.sol";
 import {ICaptainSystem, ID as CAPTAIN_SYSTEM_ID} from "../captain/ICaptainSystem.sol";
 import {PERCENTAGE_RANGE, GAME_LOGIC_CONTRACT_ROLE, LEVEL_TRAIT_ID, XP_TRAIT_ID} from "../Constants.sol";
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
@@ -19,14 +20,14 @@ import "../GameRegistryConsumerUpgradeable.sol";
 
 // Globals used by this contract
 uint256 constant TOTAL_XP_FOR_LEVEL_ID = uint256(
-    keccak256("total_xp_to_level_up")
+    keccak256("game.piratenation.global.total_xp_to_level_up")
 );
-uint256 constant GOLD_TO_LEVEL_UP_ID = uint256(keccak256("gold_to_level_up"));
+uint256 constant GOLD_TO_LEVEL_UP_ID = uint256(keccak256("game.piratenation.global.gold_to_level_up"));
 uint256 constant CAPTAIN_XP_BONUS_PERCENT_ID = uint256(
-    keccak256("captain_xp_bonus_percent")
+    keccak256("game.piratenation.global.captain_xp_bonus_percent")
 );
-uint256 constant MAX_XP_ID = uint256(keccak256("max_xp"));
-uint256 constant MAX_LEVEL_ID = uint256(keccak256("max_level"));
+uint256 constant MAX_XP_ID = uint256(keccak256("game.piratenation.global.max_xp"));
+uint256 constant MAX_LEVEL_ID = uint256(keccak256("game.piratenation.global.max_level"));
 
 /// @title LevelSystem
 /// Lets the player level up
@@ -99,14 +100,16 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
             revert MustUpgradeToHigherLevel();
         }
 
-        // Check XP
-        IGameGlobals gameGlobals = IGameGlobals(_getSystem(GAME_GLOBALS_ID));
 
-        uint256[] memory xpTable = gameGlobals.getUint256Array(
+        uint256[] memory xpTable = Uint256ArrayComponent(
+            _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
+        ).getValue(
             TOTAL_XP_FOR_LEVEL_ID
         );
 
-        uint256 maxLevel = gameGlobals.getUint256(MAX_LEVEL_ID);
+        uint256 maxLevel = Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        ).getValue(MAX_LEVEL_ID);
         if (desiredLevel >= xpTable.length || desiredLevel > maxLevel) {
             revert DesiredLevelExceedsMaxLevel(xpTable.length, desiredLevel);
         }
@@ -123,7 +126,7 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
         }
 
         // Burn the gold needed to upgrade
-        _burnGold(account, gameGlobals, currentLevel, desiredLevel);
+        _burnGold(account, currentLevel, desiredLevel);
 
         // TODO: Remove after full migration to componennts
         // Increment level trait
@@ -163,11 +166,13 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
             _getSystem(CAPTAIN_SYSTEM_ID)
         );
 
+        Uint256Component uint256Component = Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        );
+
         // Apply XP modifier for captain
         (address captainTokenContract, uint256 captainTokenId) = captainSystem
             .getCaptainNFT(owner);
-
-        IGameGlobals gameGlobals = IGameGlobals(_getSystem(GAME_GLOBALS_ID));
 
         // If NFT is the captain, grant bonus XP
         if (
@@ -175,7 +180,7 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
         ) {
             amount =
                 amount +
-                (amount * gameGlobals.getUint256(CAPTAIN_XP_BONUS_PERCENT_ID)) /
+                (amount * uint256Component.getValue(CAPTAIN_XP_BONUS_PERCENT_ID)) /
                 PERCENTAGE_RANGE;
         }
 
@@ -184,7 +189,7 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
         );
 
         // Cap XP
-        uint256 maxXp = gameGlobals.getUint256(MAX_XP_ID);
+        uint256 maxXp = uint256Component.getValue(MAX_XP_ID);
         uint256 currentXp = traitsProvider.getTraitUint256(
             tokenContract,
             tokenId,
@@ -215,12 +220,14 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
     /** INTERNAL **/
     function _burnGold(
         address account,
-        IGameGlobals gameGlobals,
         uint256 currentLevel,
         uint256 desiredLevel
     ) internal {
         uint256 goldRequired = 0;
-        uint256[] memory goldTable = gameGlobals.getUint256Array(
+
+        uint256[] memory goldTable = Uint256ArrayComponent(
+            _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
+        ).getValue(
             GOLD_TO_LEVEL_UP_ID
         );
 

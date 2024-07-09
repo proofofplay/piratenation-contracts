@@ -8,8 +8,8 @@ import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {AccountXpTrackerComponent, ID as ACCOUNT_XP_TRACKER_COMPONENT_ID} from "../generated/components/AccountXpTrackerComponent.sol";
 import {LootArrayComponent, Layout as LootArrayLayout, ID as LOOT_ARRAY_COMPONENT_ID} from "../generated/components/LootArrayComponent.sol";
 import {LootSetArrayComponent, ID as LOOT_SET_ARRAY_COMPONENT_ID} from "../generated/components/LootSetArrayComponent.sol";
-
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {Uint256ArrayComponent, ID as UINT256_ARRAY_COMPONENT_ID} from "../generated/components/Uint256ArrayComponent.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {ILootSystem} from "../loot/ILootSystem.sol";
 import {GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {IAccountXpSystem, ID} from "./IAccountXpSystem.sol";
@@ -17,12 +17,12 @@ import {ITradeLicenseSystem, ID as TRADE_LICENSE_ID} from "./ITradeLicenseSystem
 
 // GameGlobals key for TradeLicense AccountXp threshold
 uint256 constant TRADE_LICENSE_THRESHOLD = uint256(
-    keccak256("trade_license_threshold")
+    keccak256("game.piratenation.global.trade_license_threshold")
 );
 
 // GameGlobals key for Account Xp thresholds for each level
 uint256 constant ACCOUNT_XP_THRESHOLDS = uint256(
-    keccak256("account_xp_thresholds")
+    keccak256("game.piratenation.global.account_xp_thresholds")
 );
 
 /**
@@ -68,13 +68,16 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
         AccountXpTrackerComponent accountXpTracker = AccountXpTrackerComponent(
             _gameRegistry.getComponent(ACCOUNT_XP_TRACKER_COMPONENT_ID)
         );
+
+        Uint256ArrayComponent uint256ArrayComponent = Uint256ArrayComponent(
+            _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
+        );
+
         // Get current account xp and return if already at max threshold
         uint256 currentXp = accountXpTracker
             .getLayoutValue(entity)
             .currentAccountXp;
-        uint256[] memory levelThresholds = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getUint256Array(ACCOUNT_XP_THRESHOLDS);
+        uint256[] memory levelThresholds = uint256ArrayComponent.getValue(ACCOUNT_XP_THRESHOLDS);
         uint256 maxXpAmount = levelThresholds[levelThresholds.length - 1];
         // Do not grant more xp if max already reached
         if (currentXp >= maxXpAmount) {
@@ -141,9 +144,11 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
     function _convertAccountXpToLevel(
         uint256 accountXp
     ) internal view returns (uint256) {
-        uint256[] memory levelThresholds = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getUint256Array(ACCOUNT_XP_THRESHOLDS);
+        Uint256ArrayComponent uint256ArrayComponent = Uint256ArrayComponent(
+            _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
+        );
+
+        uint256[] memory levelThresholds = uint256ArrayComponent.getValue(ACCOUNT_XP_THRESHOLDS);
         uint256 currentLevel = 0;
         for (uint256 i = 0; i < levelThresholds.length; i++) {
             if (accountXp >= levelThresholds[i]) {
@@ -160,10 +165,13 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
         uint256 accountEntity,
         uint256 newAccountXp
     ) internal {
+
+        Uint256Component uint256Component = Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        );
+
         // Get account xp threshold to obtain TradeLicense
-        uint256 tradeLicenseThreshold = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getUint256(TRADE_LICENSE_THRESHOLD);
+        uint256 tradeLicenseThreshold = uint256Component.getValue(TRADE_LICENSE_THRESHOLD);
         // Check if new account xp level qualifies for TradeLicense and grant if needed
         if (_convertAccountXpToLevel(newAccountXp) >= tradeLicenseThreshold) {
             ITradeLicenseSystem tradeLicenseSystem = ITradeLicenseSystem(

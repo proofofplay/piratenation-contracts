@@ -12,7 +12,7 @@ import {ID as PIRATE_NFT_ID} from "../tokens/PirateNFTL2.sol";
 import {ID as STARTER_PIRATE_NFT_ID} from "../tokens/starterpiratenft/StarterPirateNFT.sol";
 import {IShipNFT} from "../tokens/shipnft/IShipNFT.sol";
 import {ID as SHIP_NFT_ID} from "../tokens/shipnft/ShipNFT.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol"; // DELETE?
 
 import {CombatStats, Combatable} from "./Combatable.sol";
 import {CoreMoveSystem, ID as CORE_MOVE_SYSTEM_ID} from "./CoreMoveSystem.sol";

@@ -3,12 +3,11 @@ pragma solidity ^0.8.9;
 
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
 import {ILootCallback} from "../loot/ILootCallback.sol";
 import {IGameItems, ID as GAME_ITEMS_CONTRACT_ID} from "../tokens/gameitems/IGameItems.sol";
 import {GAME_LOGIC_CONTRACT_ROLE, MINTER_ROLE} from "../Constants.sol";
 import {TradeLicenseComponent, ID as TRADE_LICENSE_COMPONENT_ID} from "../generated/components/TradeLicenseComponent.sol";
-
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {ITradeLicenseSystem, ID} from "./ITradeLicenseSystem.sol";
 import {TradeableShipNFT, ID as TRADEABLE_SHIP_NFT_ID} from "../tokens/shipnft/TradeableShipNFT.sol";
 import {TradeableGameItems, ID as TRADEABLE_GAME_ITEM_ID} from "../tokens/gameitems/TradeableGameItems.sol";
@@ -16,7 +15,7 @@ import {GoldTokenStrategy, ID as GOLD_TOKEN_STRATEGY_ID} from "../tokens/goldtok
 
 // Global: TradeLicense game item id
 uint256 constant TRADE_LICENSE_GAME_ITEMS_ID = uint256(
-    keccak256("trade_license_game_items_id")
+    keccak256("game.piratenation.global.trade_license_game_items_id")
 );
 
 /**
@@ -69,9 +68,12 @@ contract TradeLicenseSystem is
         IGameItems gameItems = IGameItems(
             _gameRegistry.getSystem(GAME_ITEMS_CONTRACT_ID)
         );
-        uint256 tradeLicenseGameItemsId = IGameGlobals(
-            _gameRegistry.getSystem(GAME_GLOBALS_ID)
-        ).getUint256(TRADE_LICENSE_GAME_ITEMS_ID);
+
+        Uint256Component uint256Component = Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        );
+
+        uint256 tradeLicenseGameItemsId = uint256Component.getValue(TRADE_LICENSE_GAME_ITEMS_ID);
         if (gameItems.balanceOf(account, tradeLicenseGameItemsId) == 0) {
             revert NoTradeLicense();
         }

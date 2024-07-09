@@ -2,7 +2,7 @@
 pragma solidity ^0.8.9;
 
 import {MINTER_ROLE} from "../Constants.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol"; // DELETE?
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {IMoveSystem, ID} from "./IMoveSystem.sol";
 

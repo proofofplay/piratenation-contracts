@@ -6,8 +6,9 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import {ContractTraits} from "../ContractTraits.sol";
 import {ITokenURIHandler} from "../ITokenURIHandler.sol";
 import {MANAGER_ROLE, NAME_TRAIT_ID, IMAGE_TRAIT_ID, DESCRIPTION_TRAIT_ID, ELEMENTAL_AFFINITY_TRAIT_ID, EXPERTISE_TRAIT_ID} from "../../Constants.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../../gameglobals/IGameGlobals.sol";
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
+import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../../generated/components/StringArrayComponent.sol";
+import {StringComponent, ID as STRING_COMPONENT_ID} from "../../generated/components/StringComponent.sol";
 import {IHoldingSystem, ID as HOLDING_SYSTEM_ID} from "../../holding/IHoldingSystem.sol";
 import {ITraitsConsumer} from "../../interfaces/ITraitsConsumer.sol";
 import {TokenURITrait, TraitDataType} from "../../interfaces/ITraitsProvider.sol";
@@ -28,15 +29,15 @@ uint256 constant STARTER_PIRATE_NFT_IMAGES_ENHANCED_ID = uint256(
 
 // Global : Starter Pirate NFT description
 uint256 constant STARTER_PIRATE_DESCRIPTION = uint256(
-    keccak256("starter_pirate_description")
+    keccak256("game.piratenation.global.starter_pirate_description")
 );
 
 // Global : Elemental Affinities
 uint256 constant ELEMENTAL_AFFINITIES = uint256(
-    keccak256("elemental_affinities")
+    keccak256("game.piratenation.global.elemental_affinities")
 );
 
-uint256 constant EXPERTISE_VALUES = uint256(keccak256("expertise_values"));
+uint256 constant EXPERTISE_VALUES = uint256(keccak256("game.piratenation.global.expertise_values"));
 
 contract StarterPirateNFTTokenURIHandler is
     GameRegistryConsumerUpgradeable,
@@ -269,8 +270,12 @@ contract StarterPirateNFTTokenURIHandler is
         if (descriptionComponent.has(entity)) {
             return descriptionComponent.getBytes(entity);
         }
-        string memory description = IGameGlobals(_getSystem(GAME_GLOBALS_ID))
-            .getString(STARTER_PIRATE_DESCRIPTION);
+
+        StringComponent stringComponent = StringComponent(
+            _gameRegistry.getComponent(STRING_COMPONENT_ID)
+        );
+
+        string memory description = stringComponent.getValue(STARTER_PIRATE_DESCRIPTION);
         return abi.encode(description);
     }
 
@@ -286,9 +291,12 @@ contract StarterPirateNFTTokenURIHandler is
             tokenId,
             ELEMENTAL_AFFINITY_TRAIT_ID
         );
-        string[] memory affinitiesArray = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getStringArray(ELEMENTAL_AFFINITIES);
+
+        StringArrayComponent stringArrayComponent = StringArrayComponent(
+            _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
+        );
+        
+        string[] memory affinitiesArray = stringArrayComponent.getValue(ELEMENTAL_AFFINITIES);
         string memory elementalAffinity = affinitiesArray[affinityId - 1];
         return abi.encode(elementalAffinity);
     }
@@ -305,9 +313,12 @@ contract StarterPirateNFTTokenURIHandler is
             tokenId,
             EXPERTISE_TRAIT_ID
         );
-        string[] memory expertiseArray = IGameGlobals(
-            _getSystem(GAME_GLOBALS_ID)
-        ).getStringArray(EXPERTISE_VALUES);
+
+        StringArrayComponent stringArrayComponent = StringArrayComponent(
+            _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
+        );
+
+        string[] memory expertiseArray = stringArrayComponent.getValue(EXPERTISE_VALUES);
         string memory expertise = expertiseArray[expertiseId - 1];
         return abi.encode(expertise);
     }

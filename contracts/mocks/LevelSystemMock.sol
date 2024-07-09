@@ -18,11 +18,13 @@ contract LevelSystemMock is LevelSystem {
             _getSystem(CAPTAIN_SYSTEM_ID)
         );
 
+        Uint256Component uint256Component = Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        );
+
         // Apply XP modifier for captain
         (address captainTokenContract, uint256 captainTokenId) = captainSystem
             .getCaptainNFT(owner);
-
-        IGameGlobals gameGlobals = IGameGlobals(_getSystem(GAME_GLOBALS_ID));
 
         // If NFT is the captain, grant bonus XP
         if (
@@ -30,7 +32,7 @@ contract LevelSystemMock is LevelSystem {
         ) {
             amount =
                 amount +
-                (amount * gameGlobals.getUint256(CAPTAIN_XP_BONUS_PERCENT_ID)) /
+                (amount * uint256Component.getValue(CAPTAIN_XP_BONUS_PERCENT_ID)) /
                 PERCENTAGE_RANGE;
         }
 
@@ -39,7 +41,7 @@ contract LevelSystemMock is LevelSystem {
         );
 
         // Cap XP
-        uint256 maxXp = gameGlobals.getUint256(MAX_XP_ID);
+        uint256 maxXp = uint256Component.getValue(MAX_XP_ID);
         uint256 currentXp = traitsProvider.getTraitUint256(
             tokenContract,
             tokenId,

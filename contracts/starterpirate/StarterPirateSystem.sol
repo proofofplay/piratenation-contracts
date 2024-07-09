@@ -11,7 +11,7 @@ import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeabl
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
+import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../generated/components/StringArrayComponent.sol";
 import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
 import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComponent.sol";
 
@@ -36,7 +36,7 @@ uint256 constant DICE_ROLL_2_TRAIT_ID = uint256(keccak256("Dice Roll 2"));
 uint256 constant STAR_SIGN_TRAIT_ID = uint256(keccak256("Star Sign"));
 
 uint256 constant STAR_SIGN_GAME_GLOBALS_ID = uint256(
-    keccak256("traits.starsign")
+    keccak256("game.piratenation.global.traits.starsign")
 );
 
 bytes32 constant API_MINTER_ROLE = keccak256("API_MINTER_ROLE");
@@ -242,8 +242,9 @@ contract StarterPirateSystem is GameRegistryConsumerUpgradeable, ILootCallback {
         );
         // Generate a new random word and set it as STAR_SIGN_TRAIT_ID
         randomWord = RandomLibrary.generateNextRandomWord(randomWord);
-        string[] memory starSigns = IGameGlobals(_getSystem(GAME_GLOBALS_ID))
-            .getStringArray(STAR_SIGN_GAME_GLOBALS_ID);
+        string[] memory starSigns = StringArrayComponent(
+            _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
+        ).getValue(STAR_SIGN_GAME_GLOBALS_ID);
         string memory randStarSign = starSigns[randomWord % starSigns.length];
         traitsProvider.setTraitString(
             starterPirateNft,

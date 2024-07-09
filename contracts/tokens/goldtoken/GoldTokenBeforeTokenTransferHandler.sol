@@ -23,6 +23,9 @@ contract GoldTokenBeforeTokenTransferHandler is
     /// @notice Cannot transfer zero amount
     error ZeroAmount();
 
+    /// @notice Cannot transfer to non-zero address
+    error TransferNotAllowed();
+
     /** SETUP **/
 
     /**
@@ -45,9 +48,13 @@ contract GoldTokenBeforeTokenTransferHandler is
         address, // tokenContract,
         address, // operator
         address from,
-        address, // to,
+        address to,
         uint256 // amount
     ) external view {
+        // Can burn gold but cannot transfer to non-zero address
+        if (from != address(0) && to != address(0)) {
+            revert TransferNotAllowed();
+        }
         if (from != address(0)) {
             // Is not banned
             if (

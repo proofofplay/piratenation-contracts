@@ -12,7 +12,7 @@ import {IEquippable} from "../equipment/IEquippable.sol";
 import {ITokenTemplateSystem} from "../tokens/ITokenTemplateSystem.sol";
 import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {CombatStats} from "./Combatable.sol";
-import {IGameGlobals} from "../gameglobals/IGameGlobals.sol";
+import {IGameGlobals} from "../gameglobals/IGameGlobals.sol"; // DELETE?
 
 /**
  * @dev Parameters for the validateVersusBattleResult function

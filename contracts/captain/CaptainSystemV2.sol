@@ -5,10 +5,10 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ICaptainSystem, ID} from "./ICaptainSystem.sol";
-import {IGameGlobals, ID as GAME_GLOBALS_ID} from "../gameglobals/IGameGlobals.sol";
 import {PERCENTAGE_RANGE, GAME_NFT_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE, IS_PIRATE_TRAIT_ID} from "../Constants.sol";
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
 import {CaptainComponentV2, ID as CAPTAIN_COMPONENT_ID} from "../generated/components/CaptainComponentV2.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {ID as PIRATE_NFT_ID} from "../tokens/PirateNFTL2.sol";
 import {GameRegistryLibrary} from "../libraries/GameRegistryLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
@@ -17,7 +17,7 @@ import "../GameRegistryConsumerUpgradeable.sol";
 
 // Globals used by this contract
 uint256 constant SET_CAPTAIN_TIMEOUT_SECS_ID = uint256(
-    keccak256("set_captain_timeout_secs")
+    keccak256("game.piratenation.global.set_captain_timeout_secs")
 );
 
 /// @title CaptainSystemV2
@@ -61,8 +61,6 @@ contract CaptainSystemV2 is ICaptainSystem, GameRegistryConsumerUpgradeable {
         uint256 accountEntity = EntityLibrary.addressToEntity(account);
         uint256 nftEntity = EntityLibrary.tokenToEntity(tokenContract, tokenId);
 
-        IGameGlobals gameGlobals = IGameGlobals(_getSystem(GAME_GLOBALS_ID));
-
         CaptainComponentV2 captainComponent = CaptainComponentV2(
             _gameRegistry.getComponent(CAPTAIN_COMPONENT_ID)
         );
@@ -70,8 +68,9 @@ contract CaptainSystemV2 is ICaptainSystem, GameRegistryConsumerUpgradeable {
             accountEntity
         );
         if (
-            block.timestamp - lastSetCaptainTime <
-            gameGlobals.getUint256(SET_CAPTAIN_TIMEOUT_SECS_ID)
+            block.timestamp - lastSetCaptainTime < Uint256Component(
+                _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+                ).getValue(SET_CAPTAIN_TIMEOUT_SECS_ID)
         ) {
             revert SetCaptainInCooldown();
         }
