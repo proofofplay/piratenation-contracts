@@ -12,12 +12,13 @@ import {EntityLibrary} from "../../core/EntityLibrary.sol";
 import {ShipNFT, ID as SHIP_NFT_ID} from "./ShipNFT.sol";
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
 import {TradeLicenseComponent, ID as TRADE_LICENSE_COMPONENT_ID} from "../../generated/components/TradeLicenseComponent.sol";
-import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../ITokenTemplateSystem.sol";
 import {TradeLicenseChecks} from "../TradeLicenseChecks.sol";
 import {TokenReentrancyGuardUpgradable} from "../TokenReentrancyGuardUpgradable.sol";
 import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/BanComponent.sol";
 import {Banned} from "../../ban/BanSystem.sol";
+import {MixinComponent, Layout as MixinComponentLayout, ID as MIXIN_COMPONENT_ID} from "../../generated/components/MixinComponent.sol";
+import {SoulboundComponent, ID as SOULBOUND_COMPONENT_ID} from "../../generated/components/SoulboundComponent.sol";
 
 import {GAME_LOGIC_CONTRACT_ROLE, SOULBOUND_TRAIT_ID, MANAGER_ROLE} from "../../Constants.sol";
 
@@ -199,15 +200,14 @@ contract TradeableShipNFT is
 
         // todo: is there a way we can combine to one transfer event?
         uint256 shipTokenIdByIndex;
-        ITokenTemplateSystem tokenTemplateSystem = ITokenTemplateSystem(
-            _gameRegistry.getSystem(TOKEN_TEMPLATE_SYSTEM_ID)
+        MixinComponent mixinComponent = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
         );
         for (uint256 i = 0; i < amount; i++) {
             shipTokenIdByIndex = tokenOfOwnerByIndex(account, i);
             // Check if soulbound and skip if it is
             if (
-                _checkIfSoulbound(tokenTemplateSystem, shipTokenIdByIndex) ==
-                false
+                _checkIfSoulbound(mixinComponent, shipTokenIdByIndex) == false
             ) {
                 _emitTransferEvent(address(0x0), account, shipTokenIdByIndex);
             }
@@ -239,16 +239,15 @@ contract TradeableShipNFT is
             revert InvalidValues();
         }
 
-        ITokenTemplateSystem tokenTemplateSystem = ITokenTemplateSystem(
-            _gameRegistry.getSystem(TOKEN_TEMPLATE_SYSTEM_ID)
+        MixinComponent mixinComponent = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
         );
 
         // If receiver doesnt have a TL, we emit a burn, skip soulbound ships
         if (to != address(0) && !_hasTradeLicense(to)) {
             for (uint256 i = 0; i < batchSize; i++) {
                 if (
-                    _checkIfSoulbound(tokenTemplateSystem, firstTokenId + i) ==
-                    false
+                    _checkIfSoulbound(mixinComponent, firstTokenId + i) == false
                 ) {
                     _emitTransferEvent(from, address(0), firstTokenId + i);
                 }
@@ -257,10 +256,7 @@ contract TradeableShipNFT is
         }
         // Otherwise emit standard transfer event, skip soulbound ships
         for (uint256 i = 0; i < batchSize; i++) {
-            if (
-                _checkIfSoulbound(tokenTemplateSystem, firstTokenId + i) ==
-                false
-            ) {
+            if (_checkIfSoulbound(mixinComponent, firstTokenId + i) == false) {
                 _emitTransferEvent(from, to, firstTokenId + i);
             }
         }
@@ -459,26 +455,27 @@ contract TradeableShipNFT is
     }
 
     /**
-     * @dev Checks if the ship is soulbound
+     * @dev Checks if the ship is soulbound. Use the mixin id of the ship and check if it's marked soulbound
+     * @param mixinComponent MixinComponent
+     * @param tokenId uint256
      */
     function _checkIfSoulbound(
-        ITokenTemplateSystem tokenTemplateSystem,
+        MixinComponent mixinComponent,
         uint256 tokenId
     ) internal view returns (bool) {
-        ShipNFT shipNFT = ShipNFT(_gameRegistry.getSystem(SHIP_NFT_ID));
-
+        uint256 entity = EntityLibrary.tokenToEntity(
+            _gameRegistry.getSystem(SHIP_NFT_ID),
+            tokenId
+        );
+        // The first mixin value is the mixin id, essentially the tokentemplate id
+        if (mixinComponent.has(entity) == false) {
+            return false;
+        }
+        uint256 mixin = mixinComponent.getLayoutValue(entity).value[0];
         if (
-            tokenTemplateSystem.hasTrait(
-                address(shipNFT),
-                tokenId,
-                SOULBOUND_TRAIT_ID
-            ) &&
-            tokenTemplateSystem.getTraitBool(
-                address(shipNFT),
-                tokenId,
-                SOULBOUND_TRAIT_ID
-            ) ==
-            true
+            SoulboundComponent(
+                _gameRegistry.getComponent(SOULBOUND_COMPONENT_ID)
+            ).getValue(mixin) == true
         ) {
             return true;
         }

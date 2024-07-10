@@ -8,14 +8,14 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.founderpirateeyescomponent.v1")
+    keccak256("game.piratenation.achievedatcomponent.v1")
 );
 
 struct Layout {
-    uint256 value;
+    string value;
 }
 
-library FounderPirateEyesComponentStorage {
+library AchievedAtComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -37,10 +37,10 @@ library FounderPirateEyesComponentStorage {
 }
 
 /**
- * @title FounderPirateEyesComponent
- * @dev The eyes of the founder pirate
+ * @title AchievedAtComponent
+ * @dev Component to track the achieved-at date of an entity
  */
-contract FounderPirateEyesComponent is BaseStorageComponentV2 {
+contract AchievedAtComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -62,9 +62,9 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
         keys = new string[](1);
         values = new TypesLibrary.SchemaValue[](1);
 
-        // The component trait value
+        // String Date value to store, primarily used for achievements
         keys[0] = "value";
-        values[0] = TypesLibrary.SchemaValue.UINT256;
+        values[0] = TypesLibrary.SchemaValue.STRING;
     }
 
     /**
@@ -84,11 +84,11 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param value The component trait value
+     * @param value String Date value to store, primarily used for achievements
      */
     function setValue(
         uint256 entity,
-        uint256 value
+        string calldata value
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         _setValue(entity, Layout(value));
     }
@@ -128,25 +128,23 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = FounderPirateEyesComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        value = AchievedAtComponentStorage.layout().entityIdToStruct[entity];
     }
 
     /**
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return value The component trait value
+     * @return value String Date value to store, primarily used for achievements
      */
     function getValue(
         uint256 entity
-    ) external view virtual returns (uint256 value) {
+    ) external view virtual returns (string memory value) {
         if (has(entity)) {
-            Layout memory s = FounderPirateEyesComponentStorage
+            Layout memory s = AchievedAtComponentStorage
                 .layout()
                 .entityIdToStruct[entity];
-            (value) = abi.decode(_getEncodedValues(s), (uint256));
+            (value) = abi.decode(_getEncodedValues(s), (string));
         }
     }
 
@@ -159,9 +157,9 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = FounderPirateEyesComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout storage s = AchievedAtComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
 
         // ABI Encode all fields of the struct and add to values array
         values = new bytes[](1);
@@ -176,9 +174,9 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = FounderPirateEyesComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout memory s = AchievedAtComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
         value = _getEncodedValues(s);
     }
 
@@ -191,10 +189,10 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = FounderPirateEyesComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
-        (s.value) = abi.decode(value, (uint256));
+        Layout memory s = AchievedAtComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
+        (s.value) = abi.decode(value, (string));
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -215,10 +213,10 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = FounderPirateEyesComponentStorage
+            Layout memory s = AchievedAtComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
-            (s.value) = abi.decode(values[i], (uint256));
+            (s.value) = abi.decode(values[i], (string));
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -234,9 +232,7 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete FounderPirateEyesComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        delete AchievedAtComponentStorage.layout().entityIdToStruct[entity];
         _emitRemoveBytes(entity);
     }
 
@@ -250,7 +246,7 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete FounderPirateEyesComponentStorage.layout().entityIdToStruct[
+            delete AchievedAtComponentStorage.layout().entityIdToStruct[
                 entities[i]
             ];
         }
@@ -269,9 +265,9 @@ contract FounderPirateEyesComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = FounderPirateEyesComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout storage s = AchievedAtComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
 
         s.value = value.value;
     }

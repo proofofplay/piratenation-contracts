@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import {MINTER_ROLE, MANAGER_ROLE, CURRENT_HEALTH_TRAIT_ID, HEALTH_TRAIT_ID} from "../Constants.sol";
 import {ILootCallback} from "../loot/ILootCallback.sol";
@@ -10,10 +10,10 @@ import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsPr
 import {ILootCallbackV2} from "../loot/ILootCallbackV2.sol";
 import {IShipNFT} from "../tokens/shipnft/IShipNFT.sol";
 import {ID as SHIP_NFT_ID} from "../tokens/shipnft/ShipNFT.sol";
-import {ID} from "./IShipSystem.sol";
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
+import {GameRegistryConsumerUpgradeable, IERC165} from "../GameRegistryConsumerUpgradeable.sol";
 
-import "../GameRegistryConsumerUpgradeable.sol";
+uint256 constant ID = uint256(keccak256("game.piratenation.shipsystem"));
 
 contract ShipSystem is
     GameRegistryConsumerUpgradeable,
@@ -133,13 +133,17 @@ contract ShipSystem is
         }
     }
 
-    function grantLootWithRandomness(
-        address,
-        uint256,
-        uint256,
-        uint256
-    ) external pure {
-        require(false, "Not implemented");
+    /**
+     * @inheritdoc ILootCallbackV2
+     */
+    function grantLootWithRandomWord(
+        address account,
+        uint256 lootId,
+        uint256 amount,
+        uint256 randomWord
+    ) external onlyRole(MINTER_ROLE) whenNotPaused returns (uint256) {
+        _grantLoot(account, lootId, amount);
+        return randomWord;
     }
 
     /** @return Whether or not this callback needs randomness */

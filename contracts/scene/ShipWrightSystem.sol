@@ -5,10 +5,9 @@ pragma solidity ^0.8.9;
 import {ID, IShipWrightSystem, UpgradeShipInput} from "./IShipWrightSystem.sol";
 import "../GameRegistryConsumerUpgradeable.sol";
 
-import {GAME_LOGIC_CONTRACT_ROLE, TEMPLATE_ID_TRAIT_ID} from "../Constants.sol";
+import {GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
-import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {IGameCurrency} from "../tokens/IGameCurrency.sol";
 import {ILootSystem} from "../loot/ILootSystem.sol";
 import {ShipNFT, ID as SHIP_NFT_ID} from "../tokens/shipnft/ShipNFT.sol";
@@ -27,6 +26,7 @@ import {UpgradeableItemComponent, Layout as UpgradeableItemComponentLayout, ID a
 import {ShipWrightCooldownComponent, Layout as ShipWrightCooldownComponentLayout, ID as SHIP_WRIGHT_COOLDOWN_COMPONENT_ID} from "../generated/components/ShipWrightCooldownComponent.sol";
 import {ShipTypeMergeableComponent, ID as SHIP_TYPE_MERGEABLE_COMPONENT_ID} from "../generated/components/ShipTypeMergeableComponent.sol";
 import {ShipWrightPlacedComponent, Layout as ShipWrightPlacedComponentLayout, ID as SHIPWRIGHT_PLACED_COMPONENT_ID} from "../generated/components/ShipWrightPlacedComponent.sol";
+import {MixinComponent, Layout as MixinComponentLayout, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
 
 /**
  * @title ShipWrightSystem
@@ -412,20 +412,23 @@ contract ShipWrightSystem is
         uint256 shipToBurnTokenId,
         uint256 shipToUpgradeTokenId
     ) internal view {
-        ITraitsProvider traitsProvider = _traitsProvider();
+        MixinComponent mixinComponent = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        );
         ShipTypeComponent shipTypeComponent = ShipTypeComponent(
             _gameRegistry.getComponent(SHIP_TYPE_COMPONENT_ID)
         );
-        uint256 shipToBurnTemplateId = traitsProvider.getTraitUint256(
-            shipNFT,
-            shipToBurnTokenId,
-            TEMPLATE_ID_TRAIT_ID
-        );
-        uint256 shipToUpgradeTemplateId = traitsProvider.getTraitUint256(
-            shipNFT,
-            shipToUpgradeTokenId,
-            TEMPLATE_ID_TRAIT_ID
-        );
+        uint256 shipToBurnTemplateId = mixinComponent
+            .getLayoutValue(
+                EntityLibrary.tokenToEntity(shipNFT, shipToBurnTokenId)
+            )
+            .value[0];
+
+        uint256 shipToUpgradeTemplateId = mixinComponent
+            .getLayoutValue(
+                EntityLibrary.tokenToEntity(shipNFT, shipToUpgradeTokenId)
+            )
+            .value[0];
         // Ensure that ship-to-burn is allowed to be burned and ensure both ships are of the same base type
         (, uint256 shipToBurnBaseType) = shipTypeComponent.getValue(
             shipToBurnTemplateId

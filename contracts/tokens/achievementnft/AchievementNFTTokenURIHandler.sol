@@ -2,14 +2,23 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
+import "../../libraries/JSONRenderer.sol";
+
+import {MixinLibrary} from "../../libraries/MixinLibrary.sol";
+import {EntityLibrary} from "../../core/EntityLibrary.sol";
 
 import {ITokenURIHandler} from "../ITokenURIHandler.sol";
-import {ITraitsConsumer} from "../../interfaces/ITraitsConsumer.sol";
-import {ITraitsProvider, TokenURITrait, TraitDataType, ID as TRAITS_PROVIDER_ID} from "../../interfaces/ITraitsProvider.sol";
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
-import {ContractTraits} from "../ContractTraits.sol";
-import {NAME_TRAIT_ID, IMAGE_TRAIT_ID, DESCRIPTION_TRAIT_ID} from "../../Constants.sol";
-import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../../tokens/ITokenTemplateSystem.sol";
+import {TokenURITrait, TraitDataType} from "../../interfaces/ITraitsProvider.sol";
+
+import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../../generated/components/MixinComponent.sol";
+import {NameComponent, ID as NAME_COMPONENT_ID} from "../../generated/components/NameComponent.sol";
+import {AchievedAtComponent, ID as ACHIEVED_AT_COMPONENT_ID} from "../../generated/components/AchievedAtComponent.sol";
+import {ID as ANIMATION_URL_COMPONENT_ID} from "../../generated/components/AnimationUrlComponent.sol";
+import {ID as DESCRIPTION_COMPONENT_ID} from "../../generated/components/DescriptionComponent.sol";
+import {ID as IMAGE_URL_COMPONENT_ID} from "../../generated/components/ImageUrlComponent.sol";
+import {ID as SOULBOUND_COMPONENT_ID} from "../../generated/components/SoulboundComponent.sol";
+import {IComponent} from "../../core/components/IComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.achievementnfttokenurihandler")
@@ -17,10 +26,14 @@ uint256 constant ID = uint256(
 
 contract AchievementNFTTokenURIHandler is
     GameRegistryConsumerUpgradeable,
-    ContractTraits,
     ITokenURIHandler
 {
     using Strings for uint256;
+
+    /** ERRORS **/
+
+    /// @notice No mixin found
+    error NoMixinFound(uint256 entityId);
 
     /** SETUP **/
 
@@ -46,126 +59,117 @@ contract AchievementNFTTokenURIHandler is
         address tokenContract,
         uint256 tokenId
     ) external view virtual override returns (string memory) {
-        ITokenTemplateSystem tokenTemplateSystem = ITokenTemplateSystem(
-            _getSystem(TOKEN_TEMPLATE_SYSTEM_ID)
-        );
+        uint256 entity = EntityLibrary.tokenToEntity(tokenContract, tokenId);
+        uint256[] memory mixins = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        ).getValue(entity);
+        if (mixins.length == 0) {
+            revert NoMixinFound(entity);
+        }
 
-        return
-            tokenTemplateSystem.generateTokenURIWithExtra(
-                tokenContract,
-                tokenId,
-                getExtraTraits(tokenContract, tokenId)
-            );
-    }
+        uint256 numStaticTraits = 7;
 
-    /**
-     * @dev This override includes the locked and soulbound traits
-     * @param tokenId  Token to generate extra traits array for
-     * @return Extra traits to include in the tokenURI metadata
-     */
-    function getExtraTraits(
-        address tokenContract,
-        uint256 tokenId
-    ) public view returns (TokenURITrait[] memory) {
-        ITraitsConsumer traitsConsumer = ITraitsConsumer(tokenContract);
-
-        ITokenTemplateSystem tokenTemplateSystem = ITokenTemplateSystem(
-            _getSystem(TOKEN_TEMPLATE_SYSTEM_ID)
-        );
-
-        uint8 numStaticTraits = 5;
-
-        TokenURITrait[] memory extraTraits = new TokenURITrait[](
+        TokenURITrait[] memory baseTraits = new TokenURITrait[](
             numStaticTraits
         );
 
-        // Note: All of the below try to get the data from the template system so that inherited traits show up
-
-        // External URL
-        extraTraits[0] = TokenURITrait({
-            name: "external_url",
-            value: abi.encode(traitsConsumer.externalURI(tokenId)),
-            dataType: TraitDataType.STRING,
-            hidden: false,
-            isTopLevelProperty: true
-        });
+        // top-level properties
 
         // Name
-        extraTraits[1] = TokenURITrait({
+        baseTraits[0] = TokenURITrait({
             name: "name",
-            value: tokenTemplateSystem.hasTrait(
-                tokenContract,
-                tokenId,
-                NAME_TRAIT_ID
-            )
-                ? tokenTemplateSystem.getTraitBytes(
-                    tokenContract,
-                    tokenId,
-                    NAME_TRAIT_ID
-                )
-                : abi.encode(traitsConsumer.tokenName(tokenId)),
+            value: MixinLibrary.getBytesValue(
+                entity,
+                mixins,
+                IComponent(_gameRegistry.getComponent(DESCRIPTION_COMPONENT_ID))
+            ),
             dataType: TraitDataType.STRING,
-            hidden: false,
-            isTopLevelProperty: true
+            isTopLevelProperty: true,
+            hidden: false
         });
 
         // Image
-        extraTraits[2] = TokenURITrait({
+        baseTraits[1] = TokenURITrait({
             name: "image",
-            value: tokenTemplateSystem.hasTrait(
-                tokenContract,
-                tokenId,
-                IMAGE_TRAIT_ID
-            )
-                ? tokenTemplateSystem.getTraitBytes(
-                    tokenContract,
-                    tokenId,
-                    IMAGE_TRAIT_ID
-                )
-                : abi.encode(traitsConsumer.imageURI(tokenId)),
+            value: MixinLibrary.getBytesValue(
+                entity,
+                mixins,
+                IComponent(_gameRegistry.getComponent(DESCRIPTION_COMPONENT_ID))
+            ),
             dataType: TraitDataType.STRING,
-            hidden: false,
-            isTopLevelProperty: true
+            isTopLevelProperty: true,
+            hidden: false
         });
 
         // Description
-        extraTraits[3] = TokenURITrait({
+        baseTraits[2] = TokenURITrait({
             name: "description",
-            value: tokenTemplateSystem.hasTrait(
-                tokenContract,
-                tokenId,
-                DESCRIPTION_TRAIT_ID
-            )
-                ? tokenTemplateSystem.getTraitBytes(
-                    tokenContract,
-                    tokenId,
-                    DESCRIPTION_TRAIT_ID
-                )
-                : abi.encode(traitsConsumer.tokenDescription(tokenId)),
+            value: MixinLibrary.getBytesValue(
+                entity,
+                mixins,
+                IComponent(_gameRegistry.getComponent(DESCRIPTION_COMPONENT_ID))
+            ),
             dataType: TraitDataType.STRING,
-            hidden: false,
-            isTopLevelProperty: true
+            isTopLevelProperty: true,
+            hidden: false
         });
 
-        // Achievement (for filtering)
-        extraTraits[4] = TokenURITrait({
-            name: "Achievement",
-            value: tokenTemplateSystem.hasTrait(
-                tokenContract,
-                tokenId,
-                NAME_TRAIT_ID
-            )
-                ? tokenTemplateSystem.getTraitBytes(
-                    tokenContract,
-                    tokenId,
-                    NAME_TRAIT_ID
+        // Animation URL
+        baseTraits[3] = TokenURITrait({
+            name: "animation_url",
+            value: MixinLibrary.getBytesValue(
+                entity,
+                mixins,
+                IComponent(
+                    _gameRegistry.getComponent(ANIMATION_URL_COMPONENT_ID)
                 )
-                : abi.encode(traitsConsumer.tokenName(tokenId)),
+            ),
             dataType: TraitDataType.STRING,
-            hidden: false,
-            isTopLevelProperty: false
+            isTopLevelProperty: true,
+            hidden: false
         });
 
-        return extraTraits;
+        baseTraits[4] = TokenURITrait({
+            name: "external_url",
+            value: abi.encode(
+                string.concat(
+                    "https://piratenation.game/nft/",
+                    Strings.toHexString(tokenContract),
+                    "/",
+                    tokenId.toString()
+                )
+            ),
+            dataType: TraitDataType.STRING,
+            isTopLevelProperty: true,
+            hidden: false
+        });
+
+        // non-top-level properties (attributes)
+
+        baseTraits[5] = TokenURITrait({
+            name: "Achieved At",
+            value: abi.encode(
+                AchievedAtComponent(
+                    _gameRegistry.getComponent(ACHIEVED_AT_COMPONENT_ID)
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.STRING,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        baseTraits[6] = TokenURITrait({
+            name: "Soulbound",
+            value: MixinLibrary.getBytesValue(
+                entity,
+                mixins,
+                IComponent(_gameRegistry.getComponent(SOULBOUND_COMPONENT_ID))
+            ),
+            dataType: TraitDataType.BOOL,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        return JSONRenderer.generateTokenURI(baseTraits);
     }
 }

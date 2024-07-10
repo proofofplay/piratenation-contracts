@@ -10,6 +10,7 @@ import {IGameItems, ID as GAME_ITEMS_CONTRACT_ID} from "../tokens/gameitems/IGam
 import {EquippableComponent, Layout as EquippableComponentLayout, ID as EQUIPPABLE_COMPONENT_ID} from "../generated/components/EquippableComponent.sol";
 import {SkinContainerComponent, Layout as SkinContainerComponentLayout, ID as SKIN_CONTAINER_COMPONENT_ID} from "../generated/components/SkinContainerComponent.sol";
 import {IShipSkinSystem, ID} from "./IShipSkinSystem.sol";
+import {MixinComponent, Layout as MixinComponentLayout, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
 
 import {ID as SHIP_NFT_ID} from "../tokens/shipnft/ShipNFT.sol";
 
@@ -161,6 +162,11 @@ contract ShipSkinSystem is GameRegistryConsumerUpgradeable, IShipSkinSystem {
         EquippableComponentLayout memory equippableLayout = EquippableComponent(
             _gameRegistry.getComponent(EQUIPPABLE_COMPONENT_ID)
         ).getLayoutValue(itemEntity);
+        uint256 shipMixin = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        ).getLayoutValue(
+            EntityLibrary.tokenToEntity(shipNft, shipTokenId)
+        ).value[0];
         for (
             uint256 i = 0;
             i < equippableLayout.equippableToEntities.length;
@@ -169,11 +175,7 @@ contract ShipSkinSystem is GameRegistryConsumerUpgradeable, IShipSkinSystem {
             // Enforce that the item is equippable to the target entity
             if (
                 equippableLayout.equippableToEntities[i] ==
-                _traitsProvider().getTraitUint256(
-                    shipNft,
-                    shipTokenId,
-                    TEMPLATE_ID_TRAIT_ID
-                )
+                shipMixin
             ) {
                 isValidEquippable = true;
                 break;

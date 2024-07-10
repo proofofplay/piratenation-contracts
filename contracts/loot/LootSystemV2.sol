@@ -18,6 +18,7 @@ import {LootTableTotalWeightComponent, ID as LOOT_TABLE_TOTAL_WEIGHT_COMPONENT_I
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {RandomLibrary} from "../libraries/RandomLibrary.sol";
 import {GameRegistryConsumerUpgradeable, IERC165} from "../GameRegistryConsumerUpgradeable.sol";
+import {LootCallbackComponent, ID as LOOT_CALLBACK_COMPONENT_ID} from "../generated/components/LootCallbackComponent.sol";
 
 // @title A loot table system
 contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
@@ -91,10 +92,10 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
                 needVRF = true;
                 break;
             } else if (loots[idx].lootType == LootType.CALLBACK) {
-                (address tokenContract, ) = EntityLibrary.entityToToken(
+                ILootCallbackV2 callbackContract = _getLootCallbackContract(
                     loots[idx].lootEntity
                 );
-                if (ILootCallbackV2(tokenContract).needsVRF()) {
+                if (callbackContract.needsVRF()) {
                     needVRF = true;
                     break;
                 }
@@ -129,13 +130,13 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
             if (loot.lootType == LootType.LOOT_TABLE) {
                 revert LootRequiresRandomness(loot.lootType);
             } else if (loot.lootType == LootType.CALLBACK) {
-                (address tokenContract, uint256 lootId) = EntityLibrary
-                    .entityToToken(loot.lootEntity);
-                ILootCallbackV2 callback = ILootCallbackV2(tokenContract);
+                ILootCallbackV2 callback = _getLootCallbackContract(
+                    loot.lootEntity
+                );
                 if (callback.needsVRF()) {
                     revert LootRequiresRandomness(loot.lootType);
                 }
-                callback.grantLoot(to, lootId, loot.amount * amount);
+                callback.grantLoot(to, loot.lootEntity, loot.amount * amount);
             } else {
                 _mintLoot(to, loot, loot.amount * amount);
             }
@@ -244,20 +245,22 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
             }
             needsVRF = true;
         } else if (lootType == LootType.CALLBACK) {
-            (address tokenContract, ) = EntityLibrary.entityToToken(
+            ILootCallbackV2 callbackContract = _getLootCallbackContract(
                 loot.lootEntity
             );
+
             if (
-                tokenContract == address(0) ||
-                IERC165(tokenContract).supportsInterface(
+                IERC165(callbackContract).supportsInterface(
                     type(ILootCallbackV2).interfaceId
-                ) ==
-                false
+                ) == false
             ) {
-                revert InvalidContractAddress(lootType, tokenContract);
+                revert InvalidContractAddress(
+                    lootType,
+                    address(callbackContract)
+                );
             }
 
-            needsVRF = ILootCallbackV2(tokenContract).needsVRF();
+            needsVRF = callbackContract.needsVRF();
         } else {
             revert InvalidLootType(lootType);
         }
@@ -269,31 +272,42 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
         Loot[] memory loots,
         uint256 randomWord
     ) private {
+        Loot memory loot;
         for (uint256 idx; idx < loots.length; ++idx) {
-            Loot memory loot = loots[idx];
+            loot = loots[idx];
             if (loot.lootType == LootType.LOOT_TABLE) {
                 if (randomWord == 0) {
                     revert InvalidRandomWord();
                 }
 
-                _pickAndMintLoot(to, loot.lootEntity, randomWord, loot.amount);
+                randomWord = _pickAndMintLoot(
+                    to,
+                    loot.lootEntity,
+                    randomWord,
+                    loot.amount
+                );
             } else if (loot.lootType == LootType.CALLBACK) {
-                (address tokenContract, uint256 lootId) = EntityLibrary
-                    .entityToToken(loot.lootEntity);
-                ILootCallbackV2 callback = ILootCallbackV2(tokenContract);
-                if (callback.needsVRF()) {
+                ILootCallbackV2 callbackContract = _getLootCallbackContract(
+                    loot.lootEntity
+                );
+
+                if (callbackContract.needsVRF()) {
                     if (randomWord == 0) {
                         revert InvalidRandomWord();
                     }
 
-                    callback.grantLootWithRandomness(
+                    randomWord = callbackContract.grantLootWithRandomWord(
                         to,
-                        lootId,
+                        loot.lootEntity,
                         loot.amount,
                         randomWord
                     );
                 } else {
-                    callback.grantLoot(to, lootId, loot.amount);
+                    callbackContract.grantLoot(
+                        to,
+                        loot.lootEntity,
+                        loot.amount
+                    );
                 }
             } else {
                 _mintLoot(to, loot, loot.amount);
@@ -314,7 +328,7 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
         uint256 lootTableEntity,
         uint256 randomWord,
         uint256 quantity
-    ) private {
+    ) private returns (uint256) {
         (
             LootTableComponentLayout memory lootTable,
             LootTableComponent lootTableComponent
@@ -329,10 +343,9 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
             _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
         );
 
+        bool needToUpdateLootTable;
         uint256 total;
         uint256 lootToMint;
-        uint256 numEntries = lootTable.lootEntities.length;
-        bool needToUpdateLootTable;
 
         for (uint256 mintIdx; mintIdx < quantity; ++mintIdx) {
             // If there's nothing to mint, return
@@ -351,11 +364,11 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
 
             // TODO: Switch this to AJ Walker Alias Algorithm to make it O(1)
 
-            for (uint256 idx; idx < numEntries; ++idx) {
+            for (uint256 idx; idx < lootTable.lootEntities.length; ++idx) {
                 total += lootTable.weights[idx];
                 if (entropy < total) {
-                    uint256 lootEntity = lootTable.lootEntities[idx];
                     uint256 maxSupply = lootTable.maxSupply[idx];
+                    uint256 lootEntity = lootTable.lootEntities[idx];
 
                     // Increment mint counter
                     uint256 mintCounter = mintCounterComponent.getValue(
@@ -366,9 +379,7 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
 
                     // See if we need to recalculate total weight and remove item once from the loot table once supply has run out
                     // Max supply of 0 is infinite.
-                    if (
-                        maxSupply > 0 && mintCounter >= lootTable.maxSupply[idx]
-                    ) {
+                    if (maxSupply > 0 && mintCounter >= maxSupply) {
                         lootTable.weights[idx] = 0;
                         totalWeight = _calculateTotalWeight(lootTable);
                         needToUpdateLootTable = true;
@@ -394,6 +405,8 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
             // Update total weight
             totalWeightComponent.setValue(lootTableEntity, totalWeight);
         }
+
+        return randomWord;
     }
 
     function _getTotalWeight(
@@ -493,5 +506,25 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
             LootEntityArrayComponent(
                 _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID)
             ).getLayoutValue(lootEntity);
+    }
+
+    function _getLootCallbackContract(
+        uint256 lootEntity
+    ) private view returns (ILootCallbackV2) {
+        uint256 systemId = LootCallbackComponent(
+            _gameRegistry.getComponent(LOOT_CALLBACK_COMPONENT_ID)
+        ).getValue(lootEntity);
+
+        if (systemId == 0) {
+            revert InvalidLootType(LootType.CALLBACK);
+        }
+
+        address contractAddress = _gameRegistry.getSystem(systemId);
+
+        if (contractAddress == address(0)) {
+            revert InvalidContractAddress(LootType.CALLBACK, contractAddress);
+        }
+
+        return ILootCallbackV2(contractAddress);
     }
 }

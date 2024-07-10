@@ -6,36 +6,49 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import {ContractTraits} from "../ContractTraits.sol";
 import {ITokenURIHandler} from "../ITokenURIHandler.sol";
 import {MANAGER_ROLE, ELEMENTAL_AFFINITY_TRAIT_ID, EXPERTISE_TRAIT_ID} from "../../Constants.sol";
-import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../../generated/components/StringArrayComponent.sol";
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
 import {IHoldingSystem, ID as HOLDING_SYSTEM_ID} from "../../holding/IHoldingSystem.sol";
-import {ITraitsConsumer} from "../../interfaces/ITraitsConsumer.sol";
-import {ITraitsProvider, TokenURITrait, TraitDataType} from "../../interfaces/ITraitsProvider.sol";
-import {NameComponent, ID as NameComponentId} from "../../generated/components/NameComponent.sol";
+import {TokenURITrait, TraitDataType} from "../../interfaces/ITraitsProvider.sol";
+
+import "../../libraries/JSONRenderer.sol";
+import {MixinLibrary} from "../../libraries/MixinLibrary.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
-import {ELEMENTAL_AFFINITIES, EXPERTISE_VALUES} from "../starterpiratenft/StarterPirateNFTTokenURIHandler.sol";
+
+import {STARTER_PIRATE_DESCRIPTION, ELEMENTAL_AFFINITIES, EXPERTISE_VALUES} from "../starterpiratenft/StarterPirateNFTTokenURIHandler.sol";
+
+import {NameComponent, ID as NameComponentId, Layout as NameComponentLayout} from "../../generated/components/NameComponent.sol";
 import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../../generated/components/LevelComponent.sol";
 import {XpComponent, ID as XP_COMPONENT_ID} from "../../generated/components/XpComponent.sol";
+import {AffinityComponent, ID as AFFINITY_COMPONENT_ID} from "../../generated/components/AffinityComponent.sol";
+import {ExpertiseComponent, ID as EXPERTISE_COMPONENT_ID} from "../../generated/components/ExpertiseComponent.sol";
+import {ImageUrlComponent, ID as IMAGE_URL_COMPONENT_ID} from "../../generated/components/ImageUrlComponent.sol";
+import {AvatarBaseSkinComponent, ID as AVATAR_BASE_SKIN_COMPONENT_ID} from "../../generated/components/AvatarBaseSkinComponent.sol";
+import {AvatarBaseHairComponent, ID as AVATAR_BASE_HAIR_COMPONENT_ID} from "../../generated/components/AvatarBaseHairComponent.sol";
+import {AvatarBaseFacialHairComponent, ID as AVATAR_BASE_FACIAL_HAIR_COMPONENT_ID} from "../../generated/components/AvatarBaseFacialHairComponent.sol";
+import {AvatarBaseCoatComponent, ID as AVATAR_BASE_COAT_COMPONENT_ID} from "../../generated/components/AvatarBaseCoatComponent.sol";
+import {AvatarBaseHeadwearComponent, ID as AVATAR_BASE_HEAD_WEAR_COMPONENT_ID} from "../../generated/components/AvatarBaseHeadwearComponent.sol";
+import {AvatarBaseBackgroundComponent, ID as AVATAR_BASE_BACKGROUND_COMPONENT_ID} from "../../generated/components/AvatarBaseBackgroundComponent.sol";
+import {AvatarBaseCharacterTypeComponent, ID as AVATAR_BASE_CHARACTER_TYPE_COMPONENT_ID} from "../../generated/components/AvatarBaseCharacterTypeComponent.sol";
+import {AvatarBaseEarringComponent, ID as AVATAR_BASE_EARRING_COMPONENT_ID} from "../../generated/components/AvatarBaseEarringComponent.sol";
+import {AvatarBaseEyeCoveringComponent, ID as AVATAR_BASE_EYE_COVERING_COMPONENT_ID} from "../../generated/components/AvatarBaseEyeCoveringComponent.sol";
+import {AvatarBaseEyeCoveringComponent, ID as AVATAR_BASE_EYE_COVERING_COMPONENT_ID} from "../../generated/components/AvatarBaseEyeCoveringComponent.sol";
+import {AvatarBaseEyesComponent, ID as AVATAR_BASE_EYES_COMPONENT_ID} from "../../generated/components/AvatarBaseEyesComponent.sol";
+import {AvatarBaseHairColorComponent, ID as AVATAR_BASE_HAIR_COLOR_COMPONENT_ID} from "../../generated/components/AvatarBaseHairColorComponent.sol";
+import {AvatarBaseMageGemComponent, ID as AVATAR_BASE_MAGE_GEM_COMPONENT_ID} from "../../generated/components/AvatarBaseMageGemComponent.sol";
+import {DiceRollComponent, ID as DICE_ROLL_COMPONENT_ID} from "../../generated/components/DiceRollComponent.sol";
+import {StarSignComponent, ID as STAR_SIGN_COMPONENT_ID} from "../../generated/components/StarSignComponent.sol";
+import {GenerationComponent, ID as GENERATION_COMPONENT_ID} from "../../generated/components/GenerationComponent.sol";
+
+import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../../generated/components/StringArrayComponent.sol";
+
+import {IComponent} from "../../core/components/IComponent.sol";
+
+import {StringComponent, ID as STRING_COMPONENT_ID} from "../../generated/components/StringComponent.sol";
+import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../../generated/components/StringArrayComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.piratenfttokenurihandler")
 );
-uint256 constant PIRATE_NFT_IMAGES_ENHANCED_ID = uint256(
-    keccak256("tokentype.piratenft.images.enhanced")
-);
-
-enum TokenTypeImage {
-    IMAGE,
-    ANIMATION_URL,
-    MODEL_GLTF_URL,
-    IMAGE_PNG_32,
-    IMAGE_PNG_64,
-    IMAGE_PNG_128,
-    IMAGE_PNG_256,
-    IMAGE_PNG_512,
-    IMAGE_PNG_1024,
-    IMAGE_PNG_2048
-}
 
 contract PirateNFTTokenURIHandler is
     GameRegistryConsumerUpgradeable,
@@ -43,6 +56,12 @@ contract PirateNFTTokenURIHandler is
     ITokenURIHandler
 {
     using Strings for uint256;
+    using Strings for address;
+
+    /** ERRORS **/
+
+    /// @notice No mixin found
+    error NoMixinFound(uint256 entityId);
 
     /** SETUP **/
 
@@ -63,54 +82,27 @@ contract PirateNFTTokenURIHandler is
      * @param tokenId  Token to generate metadata for
      * @return A normal URI
      */
+    /**
+     * @notice Generates metadata for the given tokenId
+     * @param
+     * @param tokenId  Token to generate metadata for
+     * @return A normal URI
+     */
     function tokenURI(
         address,
         address tokenContract,
         uint256 tokenId
     ) external view virtual override returns (string memory) {
-        return
-            _traitsProvider().generateTokenURI(
-                tokenContract,
-                tokenId,
-                getExtraTraits(tokenContract, tokenId)
-            );
-    }
-
-    /**
-     * @dev This override includes the locked and soulbound traits
-     * @param tokenId  Token to generate extra traits array for
-     * @return Extra traits to include in the tokenURI metadata
-     */
-    function getExtraTraits(
-        address tokenContract,
-        uint256 tokenId
-    ) public view returns (TokenURITrait[] memory) {
-        ITraitsConsumer traitsConsumer = ITraitsConsumer(tokenContract);
-        IHoldingSystem holdingSystem = IHoldingSystem(
-            _getSystem(HOLDING_SYSTEM_ID)
-        );
-
-        StringArrayComponent stringArrayComponent = StringArrayComponent(
-            _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
-        );
-
-        // Fetch voxel pirate image URIs
-        string[] memory baseImageURIs = stringArrayComponent.getValue(PIRATE_NFT_IMAGES_ENHANCED_ID);
-
-        string memory imageUri = string.concat(
-            baseImageURIs[uint256(TokenTypeImage.IMAGE)],
-            tokenId.toString()
-        );
         uint256 entity = EntityLibrary.tokenToEntity(tokenContract, tokenId);
 
-        uint256[] memory assetIds = this.getAssetTraitIds(tokenContract);
-        uint8 numStaticTraits = 9;
-        TokenURITrait[] memory extraTraits = new TokenURITrait[](
-            numStaticTraits + assetIds.length
+        uint256 numStaticTraits = 25;
+
+        TokenURITrait[] memory baseTraits = new TokenURITrait[](
+            numStaticTraits
         );
 
         // Name
-        extraTraits[0] = TokenURITrait({
+        baseTraits[0] = TokenURITrait({
             name: "name",
             value: _tokenName(tokenContract, tokenId),
             dataType: TraitDataType.STRING,
@@ -119,204 +111,330 @@ contract PirateNFTTokenURIHandler is
         });
 
         // Image
-        extraTraits[1] = TokenURITrait({
+        baseTraits[1] = TokenURITrait({
             name: "image",
-            value: abi.encode(imageUri),
+            value: abi.encode(
+                ImageUrlComponent(
+                    _gameRegistry.getComponent(IMAGE_URL_COMPONENT_ID)
+                ).getValue(entity)
+            ),
             dataType: TraitDataType.STRING,
             isTopLevelProperty: true,
             hidden: false
         });
 
         // Description
-        extraTraits[2] = TokenURITrait({
+        baseTraits[2] = TokenURITrait({
             name: "description",
-            value: abi.encode(traitsConsumer.tokenDescription(tokenId)),
+            value: abi.encode(
+                StringComponent(_gameRegistry.getComponent(STRING_COMPONENT_ID))
+                    .getValue(STARTER_PIRATE_DESCRIPTION)
+            ),
             dataType: TraitDataType.STRING,
             isTopLevelProperty: true,
             hidden: false
         });
 
         // External URL
-        extraTraits[3] = TokenURITrait({
+        baseTraits[3] = TokenURITrait({
             name: "external_url",
-            value: abi.encode(traitsConsumer.externalURI(tokenId)),
+            value: abi.encode(
+                string.concat(
+                    "https://piratenation.game/pirate/",
+                    Strings.toHexString(tokenContract),
+                    "/",
+                    tokenId.toString()
+                )
+            ),
             dataType: TraitDataType.STRING,
             isTopLevelProperty: true,
             hidden: false
         });
 
-        // Holding
-        extraTraits[4] = TokenURITrait({
-            name: "Chests Claimed",
-            isTopLevelProperty: false,
-            dataType: TraitDataType.UINT,
+        // non-top-level properties (attributes)
+
+        // Skin
+        baseTraits[4] = TokenURITrait({
+            name: "Skin",
             value: abi.encode(
-                holdingSystem.milestonesClaimed(tokenContract, tokenId)
+                AvatarBaseSkinComponent(
+                    _gameRegistry.getComponent(AVATAR_BASE_SKIN_COMPONENT_ID)
+                ).getValue(entity)
             ),
-            hidden: false
-        });
-
-        // Elemental Affinity string
-        extraTraits[5] = TokenURITrait({
-            name: "Elemental Affinity",
-            dataType: TraitDataType.STRING,
-            value: _elementalAffinity(tokenContract, tokenId),
+            dataType: TraitDataType.UINT,
             isTopLevelProperty: false,
             hidden: false
         });
 
-        // Expertise string
-        extraTraits[6] = TokenURITrait({
-            name: "Expertise",
+        // Hair
+        baseTraits[5] = TokenURITrait({
+            name: "Hair",
+            value: abi.encode(
+                AvatarBaseHairComponent(
+                    _gameRegistry.getComponent(AVATAR_BASE_HAIR_COMPONENT_ID)
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Facial Hair
+        baseTraits[6] = TokenURITrait({
+            name: "Facial Hair",
+            value: abi.encode(
+                AvatarBaseFacialHairComponent(
+                    _gameRegistry.getComponent(
+                        AVATAR_BASE_FACIAL_HAIR_COMPONENT_ID
+                    )
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Coat
+        baseTraits[7] = TokenURITrait({
+            name: "Coat",
+            value: abi.encode(
+                AvatarBaseCoatComponent(
+                    _gameRegistry.getComponent(AVATAR_BASE_COAT_COMPONENT_ID)
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Character Type
+        baseTraits[8] = TokenURITrait({
+            name: "Character Type",
+            value: abi.encode(
+                AvatarBaseCharacterTypeComponent(
+                    _gameRegistry.getComponent(
+                        AVATAR_BASE_CHARACTER_TYPE_COMPONENT_ID
+                    )
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Headwear
+        baseTraits[9] = TokenURITrait({
+            name: "Headwear",
+            value: abi.encode(
+                AvatarBaseHeadwearComponent(
+                    _gameRegistry.getComponent(
+                        AVATAR_BASE_HEAD_WEAR_COMPONENT_ID
+                    )
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Earring
+        baseTraits[10] = TokenURITrait({
+            name: "Earring",
+            value: abi.encode(
+                AvatarBaseEarringComponent(
+                    _gameRegistry.getComponent(AVATAR_BASE_EARRING_COMPONENT_ID)
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Eye Covering
+        baseTraits[11] = TokenURITrait({
+            name: "Eye Covering",
+            value: abi.encode(
+                AvatarBaseEyeCoveringComponent(
+                    _gameRegistry.getComponent(
+                        AVATAR_BASE_EYE_COVERING_COMPONENT_ID
+                    )
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Eyes
+        baseTraits[12] = TokenURITrait({
+            name: "Eyes",
+            value: abi.encode(
+                AvatarBaseEyesComponent(
+                    _gameRegistry.getComponent(AVATAR_BASE_EYES_COMPONENT_ID)
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Hair Color
+        baseTraits[13] = TokenURITrait({
+            name: "Hair Color",
+            value: abi.encode(
+                AvatarBaseHairColorComponent(
+                    _gameRegistry.getComponent(
+                        AVATAR_BASE_HAIR_COLOR_COMPONENT_ID
+                    )
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Mage Gem
+        baseTraits[14] = TokenURITrait({
+            name: "Mage Gem",
+            value: abi.encode(
+                AvatarBaseMageGemComponent(
+                    _gameRegistry.getComponent(
+                        AVATAR_BASE_MAGE_GEM_COMPONENT_ID
+                    )
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Background
+        baseTraits[15] = TokenURITrait({
+            name: "Background",
+            value: abi.encode(
+                AvatarBaseBackgroundComponent(
+                    _gameRegistry.getComponent(
+                        AVATAR_BASE_BACKGROUND_COMPONENT_ID
+                    )
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Dice Roll 1
+        baseTraits[16] = TokenURITrait({
+            name: "Dice Roll 1",
+            value: abi.encode(
+                DiceRollComponent(
+                    _gameRegistry.getComponent(DICE_ROLL_COMPONENT_ID)
+                ).getLayoutValue(entity).roll1
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Dice Roll 2
+        baseTraits[17] = TokenURITrait({
+            name: "Dice Roll 2",
+            value: abi.encode(
+                DiceRollComponent(
+                    _gameRegistry.getComponent(DICE_ROLL_COMPONENT_ID)
+                ).getLayoutValue(entity).roll2
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Star Sign
+        baseTraits[18] = TokenURITrait({
+            name: "Star Sign",
+            value: abi.encode(
+                StarSignComponent(
+                    _gameRegistry.getComponent(STAR_SIGN_COMPONENT_ID)
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Generation
+        baseTraits[19] = TokenURITrait({
+            name: "Generation",
+            value: abi.encode(
+                GenerationComponent(
+                    _gameRegistry.getComponent(GENERATION_COMPONENT_ID)
+                ).getValue(entity)
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Elemental Affinity
+        baseTraits[20] = TokenURITrait({
+            name: "Elemental Affinity",
+            value: _elementalAffinity(entity),
             dataType: TraitDataType.STRING,
-            value: _expertise(tokenContract, tokenId),
+            isTopLevelProperty: false,
+            hidden: false
+        });
+
+        // Expertise
+        baseTraits[21] = TokenURITrait({
+            name: "Expertise",
+            value: _expertise(entity),
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
 
         // Level
-        extraTraits[7] = TokenURITrait({
+        baseTraits[22] = TokenURITrait({
             name: "Level",
-            dataType: TraitDataType.UINT,
             value: abi.encode(
                 LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID))
                     .getValue(entity)
             ),
+            dataType: TraitDataType.UINT,
             isTopLevelProperty: false,
             hidden: false
         });
 
         // XP
-        extraTraits[8] = TokenURITrait({
+        baseTraits[23] = TokenURITrait({
             name: "XP",
-            dataType: TraitDataType.UINT,
             value: abi.encode(
                 XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID))
                     .getValue(entity)
             ),
+            dataType: TraitDataType.UINT,
             isTopLevelProperty: false,
             hidden: false
         });
 
-        // Assets
-        TokenURITrait[] memory assetTraits = _getAssetTraits(
-            tokenContract,
-            tokenId,
-            assetIds,
-            baseImageURIs
-        );
-        for (uint256 idx = 0; idx < assetTraits.length; idx++) {
-            extraTraits[numStaticTraits + idx] = assetTraits[idx];
-        }
+        // Chests Claimed
+        baseTraits[24] = TokenURITrait({
+            name: "Chests Claimed",
+            value: abi.encode(
+                IHoldingSystem(_getSystem(HOLDING_SYSTEM_ID)).milestonesClaimed(
+                    tokenContract,
+                    tokenId
+                )
+            ),
+            dataType: TraitDataType.UINT,
+            isTopLevelProperty: false,
+            hidden: false
+        });
 
-        return extraTraits;
-    }
-
-    /**
-     * Adds a new asset type for a contract
-     *
-     * @param tokenContract Contract to add asset types for
-     * @param asset         Asset to add to the contract
-     */
-    function addAsset(
-        address tokenContract,
-        Asset calldata asset
-    ) external onlyRole(MANAGER_ROLE) {
-        _addAsset(tokenContract, asset);
-    }
-
-    /**
-     * Removes an asset from a contract
-     *
-     * @param tokenContract Contract to remove asset from
-     * @param traitId       Keccak256 traitId of the asset to remove
-     */
-    function removeAsset(
-        address tokenContract,
-        uint256 traitId
-    ) external onlyRole(MANAGER_ROLE) {
-        _removeAsset(tokenContract, traitId);
+        return JSONRenderer.generateTokenURI(baseTraits);
     }
 
     /** INTERNAL **/
-
-    function _getAssetUri(
-        string[] memory baseImageURIs,
-        Asset memory asset
-    ) internal pure returns (string memory) {
-        // Only PirateNFT's may have enhanced tokenType at the moment
-        TokenTypeImage imageType;
-        if (_compareStrings(asset.traitName, "image")) {
-            imageType = TokenTypeImage.IMAGE;
-        } else if (_compareStrings(asset.traitName, "animation_url")) {
-            imageType = TokenTypeImage.ANIMATION_URL;
-        } else if (_compareStrings(asset.traitName, "model_gltf_url")) {
-            imageType = TokenTypeImage.MODEL_GLTF_URL;
-        } else if (_compareStrings(asset.traitName, "image_png_32")) {
-            imageType = TokenTypeImage.IMAGE_PNG_32;
-        } else if (_compareStrings(asset.traitName, "image_png_64")) {
-            imageType = TokenTypeImage.IMAGE_PNG_64;
-        } else if (_compareStrings(asset.traitName, "image_png_128")) {
-            imageType = TokenTypeImage.IMAGE_PNG_128;
-        } else if (_compareStrings(asset.traitName, "image_png_256")) {
-            imageType = TokenTypeImage.IMAGE_PNG_256;
-        } else if (_compareStrings(asset.traitName, "image_png_512")) {
-            imageType = TokenTypeImage.IMAGE_PNG_512;
-        } else if (_compareStrings(asset.traitName, "image_png_1024")) {
-            imageType = TokenTypeImage.IMAGE_PNG_1024;
-        } else if (_compareStrings(asset.traitName, "image_png_2048")) {
-            imageType = TokenTypeImage.IMAGE_PNG_2048;
-        } else {
-            return asset.uri;
-        }
-
-        if (uint256(imageType) < baseImageURIs.length) {
-            string memory imageUri = baseImageURIs[uint256(imageType)];
-            if (!_compareStrings(imageUri, "")) {
-                return imageUri;
-            }
-        }
-
-        return asset.uri;
-    }
-
-    function _getAssetTraits(
-        address tokenContract,
-        uint256 tokenId,
-        uint256[] memory assetIds,
-        string[] memory baseImageURIs
-    ) internal view returns (TokenURITrait[] memory) {
-        ContractInfo storage contractInfo = _contracts[tokenContract];
-
-        // Iterate through assetIds building TokenURITrait structs
-        TokenURITrait[] memory assetTraits = new TokenURITrait[](
-            assetIds.length
-        );
-
-        for (uint256 idx = 0; idx < assetIds.length; idx++) {
-            Asset storage asset = contractInfo.assets[assetIds[idx]];
-            assetTraits[idx] = TokenURITrait({
-                name: asset.traitName,
-                isTopLevelProperty: true,
-                dataType: TraitDataType.STRING,
-                value: abi.encode(
-                    string.concat(
-                        _getAssetUri(baseImageURIs, asset),
-                        tokenId.toString()
-                    )
-                ),
-                hidden: false
-            });
-        }
-        return assetTraits;
-    }
-
-    function _compareStrings(
-        string memory a,
-        string memory b
-    ) internal pure returns (bool) {
-        return (keccak256(bytes(a)) == keccak256(bytes(b)));
-    }
 
     /**
      * @dev Handle NFT name field with component and fallback
@@ -342,27 +460,11 @@ contract PirateNFTTokenURIHandler is
      * @dev Handle NFT Elemental Affinity string field
      */
     function _elementalAffinity(
-        address tokenContract,
-        uint256 tokenId
+        uint256 entity
     ) internal view returns (bytes memory) {
-        ITraitsProvider traitsProvider = _traitsProvider();
-        // Account for having no elemental affinity
-        if (
-            !traitsProvider.hasTrait(
-                tokenContract,
-                tokenId,
-                ELEMENTAL_AFFINITY_TRAIT_ID
-            )
-        ) {
-            return abi.encode("");
-        }
-
-
-        uint256 affinityId = traitsProvider.getTraitUint256(
-            tokenContract,
-            tokenId,
-            ELEMENTAL_AFFINITY_TRAIT_ID
-        );
+        uint256 affinityId = AffinityComponent(
+            _gameRegistry.getComponent(AFFINITY_COMPONENT_ID)
+        ).getValue(entity);
         string[] memory affinitiesArray = StringArrayComponent(
             _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
         ).getValue(ELEMENTAL_AFFINITIES);
@@ -373,28 +475,13 @@ contract PirateNFTTokenURIHandler is
     /**
      * @dev Handle NFT Expertise string field
      */
-    function _expertise(
-        address tokenContract,
-        uint256 tokenId
-    ) internal view returns (bytes memory) {
-        ITraitsProvider traitsProvider = _traitsProvider();
-        // Account for having no expertise
-        if (
-            !traitsProvider.hasTrait(tokenContract, tokenId, EXPERTISE_TRAIT_ID)
-        ) {
-            return abi.encode("");
-        }
-
-        StringArrayComponent stringArrayComponent = StringArrayComponent(
+    function _expertise(uint256 entity) internal view returns (bytes memory) {
+        uint256 expertiseId = ExpertiseComponent(
+            _gameRegistry.getComponent(EXPERTISE_COMPONENT_ID)
+        ).getValue(entity);
+        string[] memory expertiseArray = StringArrayComponent(
             _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
-        );
-
-        uint256 expertiseId = _traitsProvider().getTraitUint256(
-            tokenContract,
-            tokenId,
-            EXPERTISE_TRAIT_ID
-        );
-        string[] memory expertiseArray = stringArrayComponent.getValue(EXPERTISE_VALUES);
+        ).getValue(EXPERTISE_VALUES);
         string memory expertise = expertiseArray[expertiseId - 1];
         return abi.encode(expertise);
     }

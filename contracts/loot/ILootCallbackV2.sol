@@ -18,17 +18,20 @@ interface ILootCallbackV2 is IERC165 {
 
     /**
      * Calls the loot callback function with randomness
+     *
      * @param account       Address to grant loot to
      * @param lootId        Loot id to use
      * @param amount        Amount to grant
      * @param randomWord    Random word for this callback
+     *
+     * @return Updated random word if it was changed
      */
-    function grantLootWithRandomness(
+    function grantLootWithRandomWord(
         address account,
         uint256 lootId,
         uint256 amount,
         uint256 randomWord
-    ) external;
+    ) external returns (uint256);
 
     /** @return Whether or not this callback needs randomness */
     function needsVRF() external view returns (bool);

@@ -10,7 +10,6 @@ import {IGachaSystem, ID} from "./IGachaSystem.sol";
 import {StarterPirateSystem, ID as STARTER_PIRATE_SYSTEM_ID} from "../starterpirate/StarterPirateSystem.sol";
 
 import {GachaComponent, Layout as GachaComponentLayout, ID as GACHA_COMPONENT_ID} from "../generated/components/GachaComponent.sol";
-import {LootIndexComponent, Layout as LootIndexComponentLayout, ID as LOOT_INDEX_COMPONENT_ID} from "../generated/components/LootIndexComponent.sol";
 import {ActiveGachasComponent, Layout as ActiveGachasComponentLayout, ID as ACTIVE_GACHAS_COMPONENT_ID} from "../generated/components/ActiveGachasComponent.sol";
 import {CounterComponent, ID as COUNTER_COMPONENT_ID} from "../generated/components/CounterComponent.sol";
 import {EnabledComponent, ID as ENABLED_COMPONENT_ID} from "../generated/components/EnabledComponent.sol";
