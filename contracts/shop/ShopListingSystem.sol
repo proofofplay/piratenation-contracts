@@ -144,9 +144,9 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         // Purchases may only ever been processed once.
         //get the component.
         // if its set rever
-         ShopTokenDeliveredComponent shopTokenDeliveredComponent = ShopTokenDeliveredComponent(
-            _gameRegistry.getComponent(SHOP_TOKEN_DELIVERED_COMPONENT_ID)
-        );
+        ShopTokenDeliveredComponent shopTokenDeliveredComponent = ShopTokenDeliveredComponent(
+                _gameRegistry.getComponent(SHOP_TOKEN_DELIVERED_COMPONENT_ID)
+            );
 
         if (shopTokenDeliveredComponent.getValue(purchaseId) == true) {
             revert PurchaseAlreadyProcessed(purchaseId);
@@ -215,7 +215,7 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         uint8[] calldata quantities,
         address account
     ) internal {
-        uint256 receiptEntity = GUIDLibrary.guid(
+        uint256 receiptEntity = GUIDLibrary.guidV1(
             _gameRegistry,
             "shoplistingsystem.receipt"
         );
@@ -243,7 +243,7 @@ contract ShopListingSystem is ERC165, GameRegistryConsumerUpgradeable {
         address account
     ) internal {
         // Generate receipt
-        uint256 receiptEntity = GUIDLibrary.guid(
+        uint256 receiptEntity = GUIDLibrary.guidV1(
             _gameRegistry,
             "shoplistingsystem.receipt"
         );

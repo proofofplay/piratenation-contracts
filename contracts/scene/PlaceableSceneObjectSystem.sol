@@ -106,7 +106,8 @@ contract PlaceableSceneObjectSystem is GameRegistryConsumerUpgradeable {
             revert ItemNotPlaceable(tokenContract, tokenId);
         }
 
-        instanceEntity = _gameRegistry.generateGUID();
+        // NOTE: These are not universally safe to use!
+        instanceEntity = _gameRegistry.generateGUIDDeprecated();
 
         SceneObjectGameItemComponent(
             _gameRegistry.getComponent(SCENE_OBJECT_GAME_ITEM_COMPONENT_ID)

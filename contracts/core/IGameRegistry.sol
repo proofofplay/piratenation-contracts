@@ -112,8 +112,20 @@ interface IGameRegistry is IERC165 {
     ) external;
 
     /**
+     * Emit a component value update across chains.
+     * Emits the `PublishComponentValueSet` event for cross-chain clients to reconstruct the state.
+     * @param entity Entity to update
+     * @param data Data to update
+     */
+    function publishComponentValueSet(
+        uint256 componentId,
+        uint256 entity,
+        bytes calldata data
+    ) external returns (uint256);
+
+    /**
      * Register a component batch value update.
-     * Emits the `ComponentBatchValuesSet` event for clients to reconstruct the state.
+     * Emits the `ComponentBatchValueSet` event for clients to reconstruct the state.
      * @param entities Entities to update
      * @param data Data to update
      */
@@ -123,14 +135,36 @@ interface IGameRegistry is IERC165 {
     ) external;
 
     /**
+     * Emit a component batch value update across chains.
+     * Emits the `PublishComponentBatchValueSet` event for cross-chain clients to reconstruct the state.
+     * @param entities Entities to update
+     * @param data Data to update
+     */
+    function batchPublishComponentValueSet(
+        uint256 componentId,
+        uint256[] calldata entities,
+        bytes[] calldata data
+    ) external returns (uint256);
+
+    /**
      * Register a component value removal.
      * Emits the `ComponentValueRemoved` event for clients to reconstruct the state.
      */
     function registerComponentValueRemoved(uint256 entity) external;
 
     /**
+     * Emit a component value removal across chains.
+     * Emits the `PublishComponentValueRemoved` event for cross-chain clients to reconstruct the state.
+     */
+    // TODO: Reenable when we're ready to support cross-chain removal
+    // function publishComponentValueRemoved(
+    //     uint256 componentId,
+    //     uint256 entity
+    // ) external returns (uint256);
+
+    /**
      * Register a component batch value removal.
-     * Emits the `ComponentBatchValuesRemoved` event for clients to reconstruct the state.
+     * Emits the `ComponentBatchValueRemoved` event for clients to reconstruct the state.
      * @param entities Entities to update
      */
     function batchRegisterComponentValueRemoved(
@@ -138,9 +172,20 @@ interface IGameRegistry is IERC165 {
     ) external;
 
     /**
-     * Generate a new general-purpose entity GUID
+     * Emit a component batch value removal across chains.
+     * Emits the `PublishComponentBatchValueRemoved` event for cross-chain clients to reconstruct the state.
+     * @param entities Entities to update
      */
-    function generateGUID() external returns (uint256);
+    // TODO: Reenable when we're ready to support cross-chain removal
+    // function batchPublishComponentValueRemoved(
+    //     uint256 componentId,
+    //     uint256[] calldata entities
+    // ) external returns (uint256);
+
+    /**
+     * DEPRECATED: Generate a new general-purpose entity GUID
+     */
+    function generateGUIDDeprecated() external returns (uint256);
 
     /**
      *

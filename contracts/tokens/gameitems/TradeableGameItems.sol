@@ -203,8 +203,8 @@ contract TradeableGameItems is
                     i
                 )
             );
-
-            if (isExempt) {
+            // Skip if exempt or soulbound
+            if (isExempt || _checkSoulbound(i) == true) {
                 continue;
             }
 
@@ -238,8 +238,8 @@ contract TradeableGameItems is
     function emitTransferEvent(
         address from,
         address to,
-        uint256[] calldata ids,
-        uint256[] calldata amounts
+        uint256[] memory ids,
+        uint256[] memory amounts
     ) external beforeTransferReentrantCheck {
         if (
             msg.sender !=
@@ -247,6 +247,30 @@ contract TradeableGameItems is
                 .beforeTokenTransferHandler()
         ) {
             revert InvalidEventEmitter();
+        }
+
+        // Filter out any ids that are of soulbound items
+        uint256 originalLength = ids.length;
+        uint256 nextIndex;
+        for (uint256 i = 0; i < ids.length; i++) {
+            if (_checkSoulbound(ids[i]) == false) {
+                ids[nextIndex] = ids[i];
+                amounts[nextIndex] = amounts[i];
+                nextIndex++;
+            }
+        }
+        uint256 reduceArrayLengthBy = originalLength - nextIndex;
+        // resize ids array
+        assembly {
+            mstore(ids, sub(mload(ids), reduceArrayLengthBy))
+        }
+        // resize amounts array
+        assembly {
+            mstore(amounts, sub(mload(amounts), reduceArrayLengthBy))
+        }
+        // Nothing to emit if all items were soulbound
+        if (ids.length == 0) {
+            return;
         }
 
         bool isTradeExempt = true;
@@ -257,17 +281,22 @@ contract TradeableGameItems is
             }
         }
 
-        // sender ineligible
+        // sender doesnt have TL and item is not-trade-exempt, revert
         if (from != address(0) && !_hasTradeLicense(from) && !isTradeExempt) {
             return;
         }
 
         // receiver ineligble, acts as a burn then on our system;
+        // sender does have TL
+        // receiver does not have TL and item is not-trade-exempt, emit burn
         if (to != address(0) && !_hasTradeLicense(to) && !isTradeExempt) {
             _emitTransferEvent(from, address(0), ids, amounts);
             return;
         }
 
+        // sender has TL or item is trade exempt
+        // receiver has TL or item is trade exempt
+        // emit standard transfer
         _emitTransferEvent(from, to, ids, amounts);
     }
 
@@ -321,7 +350,10 @@ contract TradeableGameItems is
     ) external override reentrantCheck {
         _checkOwnership(from);
         _checkBalance(from, id, amount);
-        _checkSoulbound(id, to);
+        // Revert if soulbound
+        if (_checkSoulbound(id) == true) {
+            revert Soulbound();
+        }
 
         if (!_hasTradeLicense(from) && !_isTradeExempt(id)) {
             revert TradeLibrary.MissingTradeLicense();
@@ -376,7 +408,10 @@ contract TradeableGameItems is
                 revert TradeLibrary.MissingTradeLicense();
             }
             _checkBalance(from, ids[i], amounts[i]);
-            _checkSoulbound(ids[i], to);
+            // Revert if soulbound
+            if (_checkSoulbound(ids[i]) == true) {
+                revert Soulbound();
+            }
         }
 
         // You can add logic here to ensure the transfer happens in the mirrored contract.
@@ -432,16 +467,35 @@ contract TradeableGameItems is
         _emitTransferEvent(from, address(0), ids, amounts);
     }
 
+    /**
+     * Used to rectify events from trade license exemption, in batch format
+     * This will be used by Admins to create 'burn' events for items that were transferred in error
+     * that had trade license excemption.
+     * Does not actually burn any items, but just emits the event so marketplaces can have correct totals.
+     */
+    function rectifyBatchTransfers(
+        address[] calldata from,
+        uint256[] calldata ids,
+        uint256[] calldata amounts
+    ) external onlyRole(MANAGER_ROLE) {
+        address operator = _msgSender();
+
+        for (uint256 i = 0; i < from.length; i++) {
+            emit TransferSingle(
+                operator,
+                from[i],
+                address(0),
+                ids[i],
+                amounts[i]
+            );
+        }
+    }
+
     // Internal
     /**
      * Checks if the token is soulbound or not and throws if it is.
      */
-    function _checkSoulbound(uint256 tokenId, address to) internal view {
-        // allow burns
-        if (to == address(0)) {
-            return;
-        }
-
+    function _checkSoulbound(uint256 tokenId) internal view returns (bool) {
         ITraitsProvider traitsProvider = ITraitsProvider(
             _gameRegistry.getSystem(TRAITS_PROVIDER_ID)
         );
@@ -453,8 +507,9 @@ contract TradeableGameItems is
                 SOULBOUND_TRAIT_ID
             ) == true
         ) {
-            revert Soulbound();
+            return true;
         }
+        return false;
     }
 
     /**

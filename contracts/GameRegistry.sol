@@ -14,10 +14,15 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import "@opengsn/contracts/src/interfaces/IERC2771Recipient.sol";
 
 import {PAUSER_ROLE, RANDOMIZER_ROLE, DEPOSITOR_ROLE, MANAGER_ROLE, MINTER_ROLE, GAME_CURRENCY_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_ITEMS_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE, TRUSTED_FORWARDER_ROLE, DEPLOYER_ROLE} from "./Constants.sol";
-
 import "./core/IGameRegistry.sol";
 import {EntityLibrary} from "./core/EntityLibrary.sol";
 import {IComponent} from "./core/components/IComponent.sol";
+import {GUIDLibrary} from "./core/GUIDLibrary.sol";
+import {GuidCounterComponent, ID as GUID_COUNTER_COMPONENT_ID} from "./generated/components/GuidCounterComponent.sol";
+
+// NOTE: Do NOT change ID if we wish to keep multi-chain GUID's in the same namespace
+uint256 constant ID = uint256(keccak256("game.piratenation.gameregistry.v1"));
+uint80 constant GUID_PREFIX = uint80(ID);
 
 /** @title Contract to track and limit access by accounts in the same block */
 contract GameRegistry is
@@ -139,6 +144,46 @@ contract GameRegistry is
         uint256[] entities
     );
 
+    /// @notice Emitted when a ComponentValueSet should be mirrored across chains
+    event PublishComponentValueSet(
+        uint256 indexed requestId,
+        uint256 indexed componentId,
+        uint256 indexed entity,
+        uint256 chainId,
+        uint256 requestTime,
+        bytes data
+    );
+
+    /// @notice Emitted when a BatchComponentValueSet should be mirrored across chains
+    event PublishBatchComponentValueSet(
+        uint256 indexed requestId,
+        uint256 indexed componentId,
+        uint256 chainId,
+        uint256 requestTime,
+        uint256[] entities,
+        bytes[] data
+    );
+
+    /// @notice Emitted when a ComponentValueRemoved should be mirrored across chains
+    // TODO: Reenable when we're ready to support cross-chain removal
+    // event PublishComponentValueRemoved(
+    //     uint256 indexed requestId,
+    //     uint256 indexed componentId,
+    //     uint256 indexed entity,
+    //     uint256 chainId,
+    //     uint256 requestTime
+    // );
+
+    /// @notice Emitted when a BatchComponentValueRemoved should be mirrored across chains
+    // TODO: Reenable when we're ready to support cross-chain removal
+    // event PublishBatchComponentValueRemoved(
+    //     uint256 indexed requestId,
+    //     uint256 indexed componentId,
+    //     uint256 chainId,
+    //     uint256 requestTime,
+    //     uint256[] entities
+    // );
+
     /** ERRORS **/
 
     /// @notice Invalid data count compared to number of entity count
@@ -146,6 +191,9 @@ contract GameRegistry is
 
     /// @notice Trying to access a component that hasn't been previously registered
     error ComponentNotRegistered(address component);
+
+    /// @notice Trying to access a componentId that hasn't been previously registered
+    error ComponentIdNotRegistered(uint256 componentId);
 
     /// @notice Operator
     error InvalidOperatorAddress();
@@ -404,6 +452,35 @@ contract GameRegistry is
      * @inheritdoc IGameRegistry
      * @dev Only registered components can call this function, otherwise it will revert
      */
+    function publishComponentValueSet(
+        uint256 componentId,
+        uint256 entity,
+        bytes calldata data
+    )
+        external
+        virtual
+        onlyRole(GAME_LOGIC_CONTRACT_ROLE)
+        returns (uint256 requestId)
+    {
+        if (_componentIdToAddress[componentId] == address(0)) {
+            revert ComponentIdNotRegistered(componentId);
+        }
+
+        requestId = _generateGUID();
+        emit PublishComponentValueSet(
+            requestId,
+            componentId,
+            entity,
+            block.chainid,
+            block.timestamp,
+            data
+        );
+    }
+
+    /**
+     * @inheritdoc IGameRegistry
+     * @dev Only registered components can call this function, otherwise it will revert
+     */
     function batchRegisterComponentValueSet(
         uint256[] calldata entities,
         bytes[] calldata data
@@ -423,6 +500,40 @@ contract GameRegistry is
         }
 
         emit BatchComponentValueSet(componentId, entities, data);
+    }
+
+    /**
+     * @inheritdoc IGameRegistry
+     * @dev Only registered components can call this function, otherwise it will revert
+     */
+    function batchPublishComponentValueSet(
+        uint256 componentId,
+        uint256[] calldata entities,
+        bytes[] calldata data
+    )
+        external
+        virtual
+        onlyRole(GAME_LOGIC_CONTRACT_ROLE)
+        returns (uint256 requestId)
+    {
+        if (_componentIdToAddress[componentId] == address(0)) {
+            revert ComponentIdNotRegistered(componentId);
+        }
+
+        // Check to make sure the component is registered
+        if (entities.length != data.length) {
+            revert InvalidBatchData(entities.length, data.length);
+        }
+
+        requestId = _generateGUID();
+        emit PublishBatchComponentValueSet(
+            requestId,
+            componentId,
+            block.chainid,
+            block.timestamp,
+            entities,
+            data
+        );
     }
 
     /**
@@ -525,7 +636,11 @@ contract GameRegistry is
     /**
      * @inheritdoc IGameRegistry
      */
-    function generateGUID() external returns (uint256) {
+    function generateGUIDDeprecated()
+        external
+        onlyRole(GAME_LOGIC_CONTRACT_ROLE)
+        returns (uint256)
+    {
         _guidCounter++;
         uint256 guidEntity = EntityLibrary.tokenToEntity(
             address(this),
@@ -826,5 +941,16 @@ contract GameRegistry is
         } else {
             return msg.data;
         }
+    }
+
+    function _generateGUID() internal returns (uint256) {
+        GuidCounterComponent counter = GuidCounterComponent(
+            _componentIdToAddress[GUID_COUNTER_COMPONENT_ID]
+        );
+
+        // Increment guid counter
+        uint256 count = counter.getValue(GUID_PREFIX) + 1;
+        counter.setValue(GUID_PREFIX, count);
+        return GUIDLibrary.packGuid(GUID_PREFIX, count);
     }
 }

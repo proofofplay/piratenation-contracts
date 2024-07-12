@@ -352,7 +352,7 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
         _validateAndBurnTransformInputs(account, params);
 
         // Create transform instance entity to track run
-        uint256 transformInstanceEntity = GUIDLibrary.guid(
+        uint256 transformInstanceEntity = GUIDLibrary.guidV1(
             _gameRegistry,
             "transformsystem.instance"
         );
