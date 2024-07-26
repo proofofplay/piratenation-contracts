@@ -21,7 +21,7 @@ import {ERC721MirroredL2Upgradeable} from "./ERC721MirroredL2Upgradeable.sol";
 import {ERC721EnumerableUpgradeable, ERC721Upgradeable, ContextUpgradeable, IERC165Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 
 //todo: can we mix in mirrored on demand?
-/** @title NFT base contract for all game NFTs. Exposes traits for the NFT and respects GameRegistry/Soulbound/LockingSystem access control */
+/** @title NFT base contract for all game NFTs. Exposes traits for the NFT and respects GameRegistry/Soulbound access control */
 contract GameNFTV2Upgradeable is
     TraitsConsumerUpgradeable,
     ERC721OperatorFilterUpgradeable,

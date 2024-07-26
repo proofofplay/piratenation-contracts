@@ -8,7 +8,6 @@ import {MixinLibrary} from "../../libraries/MixinLibrary.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 
 import {ITokenURIHandler} from "../ITokenURIHandler.sol";
-import {ITraitsConsumer} from "../../interfaces/ITraitsConsumer.sol";
 import {TokenURITrait, TraitDataType} from "../../interfaces/ITraitsProvider.sol";
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
 import {ContractTraits} from "../ContractTraits.sol";
@@ -250,8 +249,9 @@ contract ShipNFTTokenURIHandler is
         // Loop through equipped items on trait provider and add them to the extra traits
         uint256 count = 0;
         uint256 traitCount = 0;
-        uint256 itemTokenId;
-        address itemTokenContract;
+        NameComponent nameComponent = NameComponent(
+            _gameRegistry.getComponent(NAME_COMPONENT_ID)
+        );
 
         bool[] memory visited = new bool[](itemLength);
         TokenURITrait[] memory extraTraits = new TokenURITrait[](itemLength);
@@ -270,16 +270,11 @@ contract ShipNFTTokenURIHandler is
                 }
             }
 
-            // Get the item's token contract and id
-            (itemTokenContract, itemTokenId) = EntityLibrary.entityToToken(
-                equippedItems[i]
-            );
-
             // Add the item's name to the extra traits
             extraTraits[traitCount] = TokenURITrait({
                 name: string.concat(
                     "Has ",
-                    ITraitsConsumer(itemTokenContract).tokenName(itemTokenId)
+                    nameComponent.getValue(equippedItems[i])
                 ),
                 value: abi.encode(count),
                 dataType: TraitDataType.UINT,

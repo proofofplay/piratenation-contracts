@@ -2,7 +2,7 @@
 pragma solidity ^0.8.9;
 
 import {IERC721BeforeTokenTransferHandler} from "../IERC721BeforeTokenTransferHandler.sol";
-import {GameRegistryConsumerUpgradeable, ILockingSystem, ITraitsProvider} from "../../GameRegistryConsumerUpgradeable.sol";
+import {GameRegistryConsumerUpgradeable, ITraitsProvider} from "../../GameRegistryConsumerUpgradeable.sol";
 
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 import {HasSoulComponent, ID as HAS_SOUL_COMPONENT_ID} from "../../generated/components/HasSoulComponent.sol";

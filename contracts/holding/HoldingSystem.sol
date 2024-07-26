@@ -35,6 +35,11 @@ contract HoldingSystem is GameRegistryConsumerUpgradeable, IHoldingSystem {
     /// @notice  All of the possible token contracts with milestones associated with them
     mapping(address => TokenContractInformation) private _tokenContracts;
 
+    struct IsClaimed {
+        bool claimed;
+        uint16 milestoneIndex;
+    }
+
     /** EVENTS **/
 
     /// @notice Emitted when milestones have been set
@@ -438,5 +443,20 @@ contract HoldingSystem is GameRegistryConsumerUpgradeable, IHoldingSystem {
 
         // Grant loot : update : no re-granting of loot during migration for HoldingSystem
         // _lootSystem().grantLoot(account, milestone.loots);
+    }
+
+    function getAllClaimedMilestones(
+        address tokenContract,
+        uint256 tokenId
+    ) external view returns (IsClaimed[] memory) {
+        TokenContractInformation storage info = _tokenContracts[tokenContract];
+        IsClaimed[] memory claimedMilestones = new IsClaimed[](
+            info.milestones.length
+        );
+        for (uint16 i; i < info.milestones.length; i++) {
+            claimedMilestones[i].claimed = info.claimed[tokenId][i];
+            claimedMilestones[i].milestoneIndex = i;
+        }
+        return claimedMilestones;
     }
 }

@@ -69,18 +69,6 @@ contract GameItemsBeforeTokenTransferHandler is
                 revert Banned();
             }
 
-            // Check locked status of token and disallow transfer
-            if (
-                _lockingSystem().canTransferItems(
-                    from,
-                    tokenContract,
-                    ids,
-                    amounts
-                ) == false
-            ) {
-                revert IsLocked();
-            }
-
             // Can burn soulbound items
             if (to != address(0)) {
                 // If sender is not burning, check if sender wallet has TradeLicense and each game item.

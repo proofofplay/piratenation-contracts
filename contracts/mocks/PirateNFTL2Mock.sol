@@ -12,6 +12,7 @@ import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {GENERATION_TRAIT_ID, XP_TRAIT_ID, IS_PIRATE_TRAIT_ID, LEVEL_TRAIT_ID, NAME_TRAIT_ID} from "../Constants.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
+import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 
 /** @title PirateNFTL2 Mock for testing */
 contract PirateNFTL2Mock is PirateNFTL2 {
@@ -56,6 +57,11 @@ contract PirateNFTL2Mock is PirateNFTL2 {
             IS_PIRATE_TRAIT_ID,
             true
         );
+        IsPirateComponent(_gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID))
+            .setValue(
+                EntityLibrary.tokenToEntity(address(this), tokenId),
+                true
+            );
 
         LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID)).setValue(
                 EntityLibrary.tokenToEntity(address(this), tokenId),

@@ -1,19 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import {AffinitySystem, ID as AFFINITY_SYSTEM_ID} from "../affinity/AffinitySystem.sol";
-import {BattleEvents, ID as BATTLE_EVENTS_ID, VersusResultType} from "../combat/BattleEvents.sol";
-import {BattleLibrary, ValidateVersusResultParams} from "../combat/BattleLibrary.sol";
 import {Battle, CoreBattleSystem} from "../combat/CoreBattleSystem.sol";
 import {ICombatable} from "../combat/ICombatable.sol";
 import {ID as SHIP_COMBATABLE_ID} from "../combat/ShipCombatable.sol";
 import {ID as MOB_COMBATABLE_ID} from "../combat/MobCombatable.sol";
-import {CoreMoveSystem, ID as CORE_MOVE_SYSTEM_ID} from "../combat/CoreMoveSystem.sol";
 import {GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
 import {ShipEquipment, ID as SHIP_EQUIPMENT_ID} from "../equipment/ShipEquipment.sol";
-import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 import {EndBattleParams, IDungeonBattleSystemV2, ID} from "./IDungeonBattleSystemV2.sol";
 import {StartDungeonBattleParams, DungeonTrigger, DungeonNode} from "./IDungeonSystemV3.sol";
 
@@ -115,8 +110,10 @@ contract DungeonBattleSystemV2 is CoreBattleSystem, IDungeonBattleSystemV2 {
             DUNGEON_BATTLE_COOLDOWN_ID,
             uint32(
                 Uint256Component(
-            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
-        ).getValue(DUNGEON_BATTLE_TIME_LIMIT)));
+                    _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+                ).getValue(DUNGEON_BATTLE_TIME_LIMIT)
+            )
+        );
 
         // We don't need to restrict number of battles started here,
         // that should be handled in the calling contract

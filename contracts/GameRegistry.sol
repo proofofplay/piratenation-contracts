@@ -96,9 +96,6 @@ contract GameRegistry is
     /// @notice Emitted when an Operator address is removed
     event OperatorDeregistered(address operator, address player);
 
-    /// @notice Emitted when a component's metadata has been set
-    event ComponentNameSet(uint256 componentId, string name);
-
     /// @notice Emitted when a component has been registered
     event ComponentRegistered(
         uint256 indexed componentId,
@@ -227,9 +224,6 @@ contract GameRegistry is
 
     /// @notice Register operator in cooldown
     error RegisterOperatorInCooldown();
-
-    /// @notice Deregister operator in cooldown
-    error DeregisterOperatorInCooldown();
 
     /// @notice Not authorized to perform action
     error MissingRole(address account, bytes32 expectedRole);

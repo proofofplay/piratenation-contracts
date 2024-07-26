@@ -6,13 +6,12 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ICaptainSystem, ID} from "./ICaptainSystem.sol";
 import {PERCENTAGE_RANGE, GAME_NFT_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE, IS_PIRATE_TRAIT_ID} from "../Constants.sol";
-import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
 import {CaptainComponentV2, ID as CAPTAIN_COMPONENT_ID} from "../generated/components/CaptainComponentV2.sol";
 import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
+import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 import {ID as PIRATE_NFT_ID} from "../tokens/PirateNFTL2.sol";
 import {GameRegistryLibrary} from "../libraries/GameRegistryLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {PirateLibrary} from "../libraries/PirateLibrary.sol";
 import "../GameRegistryConsumerUpgradeable.sol";
 
 // Globals used by this contract
@@ -68,9 +67,9 @@ contract CaptainSystemV2 is ICaptainSystem, GameRegistryConsumerUpgradeable {
             accountEntity
         );
         if (
-            block.timestamp - lastSetCaptainTime < Uint256Component(
-                _gameRegistry.getComponent(UINT256_COMPONENT_ID)
-                ).getValue(SET_CAPTAIN_TIMEOUT_SECS_ID)
+            block.timestamp - lastSetCaptainTime <
+            Uint256Component(_gameRegistry.getComponent(UINT256_COMPONENT_ID))
+                .getValue(SET_CAPTAIN_TIMEOUT_SECS_ID)
         ) {
             revert SetCaptainInCooldown();
         }
@@ -78,12 +77,11 @@ contract CaptainSystemV2 is ICaptainSystem, GameRegistryConsumerUpgradeable {
         if (tokenContract != address(0)) {
             // Make sure NFT is properly setup
             if (
-                PirateLibrary.isPirateNFT(
-                    _gameRegistry,
-                    _traitsProvider(),
-                    tokenContract,
-                    tokenId
-                ) == false
+                IsPirateComponent(
+                    _gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID)
+                ).getValue(
+                        EntityLibrary.tokenToEntity(tokenContract, tokenId)
+                    ) == false
             ) {
                 revert IsNotPirate();
             }

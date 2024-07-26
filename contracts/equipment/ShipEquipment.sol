@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import {EQUIPMENT_TYPE_TRAIT_ID, IS_SHIP_TRAIT_ID, ITEM_SLOTS_TRAIT_ID} from "../Constants.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
-import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 import {Equippable} from "./Equippable.sol";
 import {EquipmentType, Item} from "./IEquippable.sol";
+import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
+import {ItemSlotsComponent, Layout as ItemSlotsComponentLayout, ID as ITEM_SLOTS_COMPONENT_ID} from "../generated/components/ItemSlotsComponent.sol";
+import {IsShipComponent, ID as IS_SHIP_COMPONENT_ID} from "../generated/components/IsShipComponent.sol";
+import {CombatModifiersComponent, ID as COMBAT_MODIFIERS_COMPONENT_ID} from "../generated/components/CombatModifiersComponent.sol";
 
 // Constants
 uint256 constant ID = uint256(keccak256("game.piratenation.shipequipment"));
@@ -31,88 +32,49 @@ contract ShipEquipment is Equippable {
     /**
      * @dev Return the number of item slots a parent entity has for a specific slot type
      * @param parentEntity A packed tokenId and address for the parent entity which will equip the item
-     * @param slotType Keccak256 identifier of the slot type to equip item to return item count for
      */
     function getSlotCount(
         uint256 parentEntity,
-        uint256 slotType
+        uint256
     ) public view override returns (uint256) {
-        ITokenTemplateSystem tokenTemplateSystem = ITokenTemplateSystem(
-            _getSystem(TOKEN_TEMPLATE_SYSTEM_ID)
-        );
+        // Get mixin id for the ship
+        uint256 mixinId = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        ).getValue(parentEntity)[0];
+        // Get ItemSlotsComponent for the mixin
+        uint256 itemSlotCount = ItemSlotsComponent(
+            _gameRegistry.getComponent(ITEM_SLOTS_COMPONENT_ID)
+        ).getValue(mixinId);
 
-        // Ships only have a single slot type
-        if (slotType != SHIP_CORE_SLOT_TYPE) {
-            return 0;
-        }
-
-        // Get ITEM_SLOTS_TRAIT_ID from TokenTemplateSystem
-        (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
-            parentEntity
-        );
-        return
-            tokenTemplateSystem.hasTrait(
-                tokenContract,
-                tokenId,
-                ITEM_SLOTS_TRAIT_ID
-            )
-                ? tokenTemplateSystem.getTraitUint256(
-                    tokenContract,
-                    tokenId,
-                    ITEM_SLOTS_TRAIT_ID
-                )
-                : 0;
+        return itemSlotCount;
     }
 
     /** INTERNAL **/
-
-    /**
-     * @dev Returns the slot types available for a parent entity
-     */
-    function _getSlotTypes(
-        uint256
-    ) internal pure override returns (uint256[] memory) {
-        uint256[] memory slotTypes = new uint256[](1);
-        slotTypes[0] = SHIP_CORE_SLOT_TYPE;
-        return slotTypes;
-    }
 
     /**
      * @dev Function to override with custom validation logic
      */
     function _isItemEquippable(
         uint256 parentEntity,
-        Item calldata item,
-        ITraitsProvider traitsProvider
+        Item calldata item
     ) internal view override returns (bool) {
-        (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
-            parentEntity
-        );
-
-        // Check is valid slot type
-        if (item.slotType != SHIP_CORE_SLOT_TYPE) {
-            return false;
-        }
-
         // Check that parent is a ship
-        if (
-            traitsProvider.getTraitBool(
-                tokenContract,
-                tokenId,
-                IS_SHIP_TRAIT_ID
-            ) == false
-        ) {
+        // Get mixin id for the ship
+        uint256 mixinId = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        ).getValue(parentEntity)[0];
+        bool isShip = IsShipComponent(
+            _gameRegistry.getComponent(IS_SHIP_COMPONENT_ID)
+        ).getValue(mixinId);
+        if (isShip == false) {
             return false;
         }
 
-        // Check if item is equippable by parent
-        (tokenContract, tokenId) = EntityLibrary.entityToToken(item.itemEntity);
+        // If combatmodifiers exist then its equippable
         if (
-            traitsProvider.getTraitUint256(
-                tokenContract,
-                tokenId,
-                EQUIPMENT_TYPE_TRAIT_ID
-            ) != uint256(EquipmentType.SHIPS)
+            CombatModifiersComponent(
+                _gameRegistry.getComponent(COMBAT_MODIFIERS_COMPONENT_ID)
+            ).has(item.itemEntity) == false
         ) {
             return false;
         }

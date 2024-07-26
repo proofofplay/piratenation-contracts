@@ -2,7 +2,7 @@
 pragma solidity ^0.8.9;
 
 import {IERC721BeforeTokenTransferHandler} from "../IERC721BeforeTokenTransferHandler.sol";
-import {GameRegistryConsumerUpgradeable, ILockingSystem, ITraitsProvider} from "../../GameRegistryConsumerUpgradeable.sol";
+import {GameRegistryConsumerUpgradeable, ITraitsProvider} from "../../GameRegistryConsumerUpgradeable.sol";
 import {SOULBOUND_TRAIT_ID} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
@@ -52,18 +52,6 @@ contract GameNFTBeforeTokenTransferHandler is
     ) external view {
         // Locked check if not minting
         if (from != address(0)) {
-            ILockingSystem lockingSystem = _lockingSystem();
-            for (uint256 idx = 0; idx < batchSize; idx++) {
-                if (
-                    lockingSystem.isNFTLocked(
-                        tokenContract,
-                        firstTokenId + idx
-                    ) == true
-                ) {
-                    revert IsLocked();
-                }
-            }
-
             // Soulbound check if not minting
             // Can burn soulbound items
             if (to != address(0)) {

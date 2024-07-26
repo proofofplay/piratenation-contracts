@@ -10,7 +10,6 @@ import {PERCENTAGE_RANGE, TRUSTED_FORWARDER_ROLE, PAUSER_ROLE, MANAGER_ROLE} fro
 
 import {ISystem} from "./core/ISystem.sol";
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "./interfaces/ITraitsProvider.sol";
-import {ILockingSystem, ID as LOCKING_SYSTEM_ID} from "./locking/ILockingSystem.sol";
 import {IRandomizer, IRandomizerCallback, ID as RANDOMIZER_ID} from "./randomizer/IRandomizer.sol";
 import {ILootSystem, ID as LOOT_SYSTEM_ID} from "./loot/ILootSystem.sol";
 import {IGameRegistry, IERC165} from "./core/IGameRegistry.sol";
@@ -200,11 +199,6 @@ abstract contract GameRegistryConsumerUpgradeable is
     /** @return Returns the traits provider for this contract */
     function _traitsProvider() internal view returns (ITraitsProvider) {
         return ITraitsProvider(_getSystem(TRAITS_PROVIDER_ID));
-    }
-
-    /** @return Interface to the LockingSystem */
-    function _lockingSystem() internal view returns (ILockingSystem) {
-        return ILockingSystem(_gameRegistry.getSystem(LOCKING_SYSTEM_ID));
     }
 
     /** @return Interface to the LootSystem */

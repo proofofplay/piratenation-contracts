@@ -27,14 +27,6 @@ struct Item {
  */
 interface IEquippable {
     /**
-     * @dev Returns the total combat modifiers given a parent entity's equipment loadout
-     * @param parentEntity A packed tokenId and address for a parent entity which equips items
-     */
-    function getCombatModifiers(
-        uint256 parentEntity
-    ) external view returns (int256[] memory);
-
-    /**
      * @dev Returns the equipment loadout at a parent entity's slotType, or initializes a new one
      * @param parentEntity A packed tokenId and address for the parent entity which will equip the item
      * @param slotType Keccak256 identifier of the slot type to get equipment loadout for

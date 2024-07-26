@@ -118,9 +118,7 @@ contract GameNFTTokenURIHandler is
             name: "locked",
             isTopLevelProperty: false,
             dataType: TraitDataType.BOOL,
-            value: abi.encode(
-                _lockingSystem().isNFTLocked(tokenContract, tokenId)
-            ),
+            value: abi.encode(false),
             hidden: false
         });
 

@@ -5,7 +5,6 @@ pragma solidity ^0.8.13;
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import {GameRegistryLibrary} from "../libraries/GameRegistryLibrary.sol";
-import {TraitsLibrary} from "../libraries/TraitsLibrary.sol";
 import {RandomLibrary} from "../libraries/RandomLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {TransformLibrary} from "./TransformLibrary.sol";
@@ -16,7 +15,6 @@ import {ILootSystemV2, ID as LOOT_SYSTEM_ID} from "../loot/ILootSystemV2.sol";
 import {IGameItems} from "../tokens/gameitems/IGameItems.sol";
 import {IGameCurrency} from "../tokens/IGameCurrency.sol";
 import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
-import {IRequirementSystem, ID as REQUIREMENT_SYSTEM_ID} from "../requirements/IRequirementSystem.sol";
 import {ID} from "./ITransformSystem.sol";
 import {TransformAccountDataComponent, Layout as TransformAccountDataComponentLayout, ID as TRANSFORM_ACCOUNT_DATA_COMPONENT_ID} from "../generated/components/TransformAccountDataComponent.sol";
 import {TransformInstanceComponent, Layout as TransformInstanceComponentLayout, ID as TRANSFORM_INSTANCE_COMPONENT_ID} from "../generated/components/TransformInstanceComponent.sol";
@@ -810,19 +808,6 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
         ITransformRunnerSystem[] memory transformRunners,
         TransformParams calldata params
     ) internal view returns (bool) {
-        // TODO: Perform all requirement checks (future checks here)
-        // IRequirementSystem requirementSystem = IRequirementSystem(
-        //     _getSystem(REQUIREMENT_SYSTEM_ID)
-        // );
-        // if (
-        //     requirementSystem.performAccountCheckBatch(
-        //         account,
-        //         transformDef.requirements
-        //     ) == false
-        // ) {
-        //     return false;
-        // }
-
         if (transformRunners.length == 0) {
             return false;
         }

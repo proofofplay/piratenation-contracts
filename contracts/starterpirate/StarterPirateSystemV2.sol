@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {MINTER_ROLE, MANAGER_ROLE, RANDOMIZER_ROLE} from "../Constants.sol";
+import {MINTER_ROLE, MANAGER_ROLE, RANDOMIZER_ROLE, XP_TRAIT_ID, LEVEL_TRAIT_ID} from "../Constants.sol";
 import {RandomLibrary} from "../libraries/RandomLibrary.sol";
 import {StarterPirateNFT, ID as STARTER_PIRATE_NFT_ID} from "../tokens/starterpiratenft/StarterPirateNFT.sol";
 import {ILootCallbackV2} from "../loot/ILootCallbackV2.sol";
@@ -25,6 +25,9 @@ import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/
 import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComponent.sol";
 import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../generated/components/StringArrayComponent.sol";
+
+// TODO: Remove once we finish component migration
+import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.starterpiratesystem.v2")
@@ -287,6 +290,23 @@ contract StarterPirateSystemV2 is
         randomWord = _setDynamicTraits(randomWord, entity);
         // Set static traits
         _setStaticTraits(entity);
+
+        //TODO: Remove this once we've fully migrated to components
+        ITraitsProvider traitsProvider = _traitsProvider();
+        // XP trait
+        traitsProvider.setTraitUint256(
+            address(starterPirateNFT),
+            tokenId,
+            XP_TRAIT_ID,
+            0
+        );
+        // Level trait
+        traitsProvider.setTraitUint256(
+            address(starterPirateNFT),
+            tokenId,
+            LEVEL_TRAIT_ID,
+            1
+        );
 
         return randomWord;
     }

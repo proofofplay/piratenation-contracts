@@ -3,11 +3,12 @@
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import {IGameItems, ID as GAME_ITEMS_ID} from "../tokens/gameitems/IGameItems.sol";
 
 import {MANAGER_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {ID as PIRATE_NFT_ID} from "../tokens/PirateNFTL2.sol";
 import {ID as STARTER_PIRATE_NFT_ID} from "../tokens/starterpiratenft/StarterPirateNFT.sol";
-import "../libraries/GameHelperLibrary.sol";
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 
 import {IEnergySystemV3, ID} from "./IEnergySystem.sol";
@@ -19,6 +20,7 @@ import {Uint256Component, ID as Uint256ComponentId} from "../generated/component
 import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_LIST_COMPONENT_ID} from "../generated/components/EntityListComponent.sol";
 import {EnergyPackCountComponent, ID as ENERGY_PACK_COUNT_COMPONENT_ID} from "../generated/components/EnergyPackCountComponent.sol";
 import {EnergyPackComponent, Layout as EnergyPackComponentLayout, ID as ENERGY_PACK_COMPONENT_ID} from "../generated/components/EnergyPackComponent.sol";
+import {EnergyProvidedComponent, Layout as EnergyProvidedComponentLayout, ID as ENERGY_PROVIDED_COMPONENT_ID} from "../generated/components/EnergyProvidedComponent.sol";
 import {ID as LOOT_ARRAY_COMPONENT_ID} from "../generated/components/LootArrayComponent.sol";
 
 // Globals used by this contract
@@ -69,6 +71,12 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
 
     /// @notice Utility not available
     error NotAvailable();
+
+    /// @notice Invalid input parameters
+    error InvalidInputParameters();
+
+    /// @notice Account does not have enough tokens
+    error NotEnoughTokens();
 
     /**
      * Initializer for this upgradeable contract
@@ -280,6 +288,35 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
         );
     }
 
+    /**
+     * @dev Use energy consumable, limited by the drunkness cap
+     * @param entity Entity to consume to gain energy
+     * @param amount Amount of consumables to use
+     */
+    function useEnergyConsumable(
+        uint256 entity,
+        uint256 amount
+    ) external whenNotPaused nonReentrant {
+        address caller = _getPlayerAccount(_msgSender());
+        if (entity == 0 || amount == 0) {
+            revert InvalidInputParameters();
+        }
+        uint256 energyProvidedAmount = EnergyProvidedComponent(
+            _gameRegistry.getComponent(ENERGY_PROVIDED_COMPONENT_ID)
+        ).getValue(entity);
+        if (energyProvidedAmount == 0) {
+            revert NotAvailable();
+        }
+        uint256 totalEnergy = energyProvidedAmount * amount;
+        (, uint256 tokenId) = EntityLibrary.entityToToken(entity);
+        IGameItems gameItems = IGameItems(_getSystem(GAME_ITEMS_ID));
+        if (amount > gameItems.balanceOf(caller, tokenId)) {
+            revert NotEnoughTokens();
+        }
+        gameItems.burn(caller, tokenId, amount);
+        _giveEnergy(EntityLibrary.addressToEntity(caller), totalEnergy);
+    }
+
     /** INTERNAL */
 
     function _grantEnergy(uint256 entity, uint256 amount) internal {
@@ -392,9 +429,8 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
         }
         // Return DAILY_ENERGY_AMOUNT_ID globals value
         return
-            Uint256Component(
-            _gameRegistry.getComponent(Uint256ComponentId)
-        ).getValue(DAILY_ENERGY_AMOUNT_ID);
+            Uint256Component(_gameRegistry.getComponent(Uint256ComponentId))
+                .getValue(DAILY_ENERGY_AMOUNT_ID);
     }
 
     function _energyRegenPerSecond() internal view returns (uint256) {
@@ -467,21 +503,16 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
 
     function _maxEnergyEarnable() internal view returns (uint256) {
         // Return DAILY_ENERGY_AMOUNT_ID globals value
-        return Uint256Component(
-            _gameRegistry.getComponent(Uint256ComponentId)
-        ).getValue(
-                MAX_ENERGY_EARNABLE_ID
-            );
+        return
+            Uint256Component(_gameRegistry.getComponent(Uint256ComponentId))
+                .getValue(MAX_ENERGY_EARNABLE_ID);
     }
 
     function _energyEarnableRegenPerSecond() internal view returns (uint256) {
-
         // Regen 1 ether per hour
         uint256 earnableEnergyAmount = Uint256Component(
             _gameRegistry.getComponent(Uint256ComponentId)
-        ).getValue(
-            ENERGY_EARNABLE_RATE
-        );
+        ).getValue(ENERGY_EARNABLE_RATE);
 
         // Return ether energy unit per hour
         return earnableEnergyAmount / ENERGY_EARNABLE_REGEN_SECS;

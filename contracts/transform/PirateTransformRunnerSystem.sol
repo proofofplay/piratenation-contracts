@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 
 import "../libraries/RandomLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {PirateLibrary} from "../libraries/PirateLibrary.sol";
 
 import {GAME_LOGIC_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GENERATION_TRAIT_ID, LEVEL_TRAIT_ID, IS_PIRATE_TRAIT_ID} from "../Constants.sol";
 
@@ -14,6 +13,8 @@ import {ITransformRunnerSystem, TransformParams} from "./ITransformRunnerSystem.
 import {PirateTransformRunnerConfigComponent, Layout as PirateTransformRunnerConfigComponentLayout, ID as PIRATE_QUEST_RUNNER_CONFIG_COMPONENT_ID} from "../generated/components/PirateTransformRunnerConfigComponent.sol";
 import {LootEntityArrayComponent, Layout as LootEntityArrayComponentLayout} from "../generated/components/LootEntityArrayComponent.sol";
 import {BaseTransformRunnerSystem, TransformInputComponentLayout, TransformInstanceComponentLayout} from "./BaseTransformRunnerSystem.sol";
+import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
+import {GenerationComponent, ID as GENERATION_COMPONENT_ID} from "../generated/components/GenerationComponent.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
 
@@ -194,17 +195,16 @@ contract PirateTransformRunnerSystem is BaseTransformRunnerSystem {
     ) internal view {
         // Make sure input zero is a pirate NFT
         if (
-            PirateLibrary.isPirateNFT(
-                _gameRegistry,
-                _traitsProvider(),
-                tokenContract,
-                tokenId
-            ) == false
+            IsPirateComponent(
+                _gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID)
+            ).getValue(EntityLibrary.tokenToEntity(tokenContract, tokenId)) ==
+            false
         ) {
             revert FirstInputMustBePirateNFT();
         }
 
         // Get pirate level
+        // TODO: replace this with LevelComponent read once we're fully migrated
         uint32 pirateLevel = uint32(
             _traitsProvider().getTraitUint256(
                 tokenContract,
@@ -215,11 +215,9 @@ contract PirateTransformRunnerSystem is BaseTransformRunnerSystem {
 
         // Get pirate generation
         uint32 pirateGeneration = uint32(
-            _traitsProvider().getTraitUint256(
-                tokenContract,
-                tokenId,
-                GENERATION_TRAIT_ID
-            )
+            GenerationComponent(
+                _gameRegistry.getComponent(GENERATION_COMPONENT_ID)
+            ).getValue(EntityLibrary.tokenToEntity(tokenContract, tokenId))
         );
 
         // Check pirate level

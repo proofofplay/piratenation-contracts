@@ -4,11 +4,13 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 
-import {COMBAT_MODIFIERS_TRAIT_ID, EQUIPMENT_TYPE_TRAIT_ID, GAME_ITEMS_CONTRACT_ROLE} from "../Constants.sol";
+import {ID as GAME_ITEMS_ID} from "../tokens/gameitems/IGameItems.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {Item, IEquippable} from "./IEquippable.sol";
 import {ItemsEquippedComponent, ID as ITEMS_EQUIPPED_COMPONENT_ID} from "../generated/components/ItemsEquippedComponent.sol";
+import {ItemSlotsComponent, Layout as ItemSlotsComponentLayout, ID as ITEM_SLOTS_COMPONENT_ID} from "../generated/components/ItemSlotsComponent.sol";
+import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
+import {CombatModifiersComponent, ID as COMBAT_MODIFIERS_COMPONENT_ID} from "../generated/components/CombatModifiersComponent.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
 
@@ -22,7 +24,16 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
     /** ERRORS **/
 
     /// @notice Invalid item cannot be equipped by parent
-    error InvalidItem(uint256 parentEntity, uint256 itemEntity);
+    error InvalidItem(uint256 itemEntity);
+
+    /// @notice Item cannot be equipped to parent
+    error ItemNonEquippableToParent(uint256 parentEntity, uint256 itemEntity);
+
+    /// @notice Unauthorized item cannot be equipped by parent
+    error UnauthorizedItem(address tokenContract, uint256 tokenId);
+
+    /// @notice Invalid balance for item
+    error InvalidBalance(uint256 tokenId);
 
     /// @notice Item cannot be equipped by invalid parent
     error InvalidParent();
@@ -31,54 +42,18 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
     error InvalidSlot(uint256 slottedItemEntity, uint256 replaceItemEntity);
 
     /// @notice Desired slot index is invalid
-    error InvalidSlotIndex(uint256 index);
+    error InvalidSlotIndex(uint256 slotCount, uint256 indexUsed);
 
     /** EXTERNAL **/
 
     /**
      * @inheritdoc IEquippable
      */
-    function getCombatModifiers(
-        uint256 parentEntity
-    ) external view override returns (int256[] memory) {
-        ITraitsProvider traitsProvider = _traitsProvider();
-
-        // Get all slot types
-        uint256[] memory slotTypes = _getSlotTypes(parentEntity);
-
-        // Loop through slot types and get equipment loadout for each
-        int256[] memory combatModifiers = new int256[](5);
-        for (uint256 i = 0; i < slotTypes.length; i++) {
-            uint256[] memory equipment = _getItems(
-                parentEntity,
-                slotTypes[i],
-                traitsProvider
-            );
-            for (uint256 j = 0; j < equipment.length; j++) {
-                // Get combat modifiers for item
-                int256[] memory itemCombatModifiers = _getItemCombatModifiers(
-                    equipment[j],
-                    traitsProvider
-                );
-
-                // Add item combat modifiers to parent combat modifiers
-                for (uint256 k = 0; k < itemCombatModifiers.length; k++) {
-                    combatModifiers[k] += itemCombatModifiers[k];
-                }
-            }
-        }
-
-        return combatModifiers;
-    }
-
-    /**
-     * @inheritdoc IEquippable
-     */
     function getItems(
         uint256 parentEntity,
-        uint256 slotType
+        uint256
     ) external view returns (uint256[] memory) {
-        return _getItems(parentEntity, slotType, _traitsProvider());
+        return _getItems(parentEntity);
     }
 
     /**
@@ -104,7 +79,7 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         }
 
         for (uint256 i = 0; i < items.length; ++i) {
-            _removeItem(account, parentEntity, items[i], _traitsProvider());
+            _removeItem(account, parentEntity, items[i]);
         }
     }
 
@@ -139,69 +114,33 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
      * @dev Returns the equipment loadout at a parent entity's slotType, or initializes a new one
      */
     function _getItems(
-        uint256 parentEntity,
-        uint256 slotType,
-        ITraitsProvider traitsProvider
-    ) internal view returns (uint256[] memory) {
-        (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
-            parentEntity
-        );
-
-        // Pull current slots from trait provider or initialize new array if no trait exists
-        return
-            traitsProvider.hasTrait(tokenContract, tokenId, slotType)
-                ? traitsProvider.getTraitUint256Array(
-                    tokenContract,
-                    tokenId,
-                    slotType
-                )
-                : new uint256[](getSlotCount(parentEntity, slotType));
-    }
-
-    /**
-     * @dev Returns the combat modifiers for an item
-     */
-    function _getItemCombatModifiers(
-        uint256 itemEntity,
-        ITraitsProvider traitsProvider
-    ) internal view returns (int256[] memory) {
-        (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
-            itemEntity
-        );
-
-        // Return combat modifiers for item if it has them
-        return
-            traitsProvider.hasTrait(
-                tokenContract,
-                tokenId,
-                COMBAT_MODIFIERS_TRAIT_ID
-            )
-                ? traitsProvider.getTraitInt256Array(
-                    tokenContract,
-                    tokenId,
-                    COMBAT_MODIFIERS_TRAIT_ID
-                )
-                : new int256[](5);
-    }
-
-    /**
-     * @dev Returns the slot types available for a parent entity
-     * @param parentEntity A packed tokenId and address for a parent entity which equips items
-     */
-    function _getSlotTypes(
         uint256 parentEntity
-    ) internal view virtual returns (uint256[] memory);
+    ) internal view returns (uint256[] memory) {
+        uint256 mixinId = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        ).getValue(parentEntity)[0];
+        uint256 slotCount = ItemSlotsComponent(
+            _gameRegistry.getComponent(ITEM_SLOTS_COMPONENT_ID)
+        ).getValue(mixinId);
+        uint256[] memory equippedItems = ItemsEquippedComponent(
+            _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
+        ).getValue(parentEntity);
+        // Pull current equipped items of ship or initialize new array if no data exists
+        if (equippedItems.length > 0) {
+            return equippedItems;
+        } else {
+            return new uint256[](slotCount);
+        }
+    }
 
     /**
      * @dev Function to override with custom validation logic
      * @param parentEntity A packed tokenId and address for a parent entity which equips items
      * @param item Item params which specify entity, slot type, and slot index to remove
-     * @param traitsProvider Reference to TraitsProvider system for reading traits
      */
     function _isItemEquippable(
         uint256 parentEntity,
-        Item calldata item,
-        ITraitsProvider traitsProvider
+        Item calldata item
     ) internal virtual returns (bool);
 
     /**
@@ -223,35 +162,29 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         address account,
         uint256 parentEntity,
         uint256 existingItemEntity,
-        Item calldata item,
-        ITraitsProvider traitsProvider
+        Item calldata item
     ) internal {
         (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
             item.itemEntity
         );
 
-        // Ensure item a burnable game item; for now must be ERC1155
-        // Also requires item to implement TraitConsumer which aids in reading traits
-        if (_hasAccessRole(GAME_ITEMS_CONTRACT_ROLE, tokenContract) == false) {
-            revert InvalidItem(parentEntity, item.itemEntity);
+        if (tokenContract != _getSystem(GAME_ITEMS_ID)) {
+            revert UnauthorizedItem(tokenContract, tokenId);
         }
 
         // Check if parent is owner of item
         if (IERC1155(tokenContract).balanceOf(account, tokenId) == 0) {
-            revert InvalidItem(parentEntity, item.itemEntity);
+            revert InvalidBalance(tokenId);
         }
 
         // Check if valid slot index for parent
-        if (getSlotCount(parentEntity, item.slotType) <= item.slotIndex) {
-            revert InvalidSlotIndex(item.slotIndex);
+        uint256 slotCount = getSlotCount(parentEntity, item.slotType);
+        if (slotCount <= item.slotIndex) {
+            revert InvalidSlotIndex(slotCount, item.slotIndex);
         }
 
         // Check if slot is occupied; if so it must match existingItemEntity
-        uint256[] memory slots = _getItems(
-            parentEntity,
-            item.slotType,
-            traitsProvider
-        );
+        uint256[] memory slots = _getItems(parentEntity);
         if (
             slots[item.slotIndex] != 0 &&
             slots[item.slotIndex] != existingItemEntity
@@ -259,22 +192,20 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
             revert InvalidSlot(slots[item.slotIndex], existingItemEntity);
         }
 
-        // Check item has `equipment_type` trait
+        // If combatmodifiers exist then its equippable
         if (
-            !traitsProvider.hasTrait(
-                tokenContract,
-                tokenId,
-                EQUIPMENT_TYPE_TRAIT_ID
-            )
+            CombatModifiersComponent(
+                _gameRegistry.getComponent(COMBAT_MODIFIERS_COMPONENT_ID)
+            ).has(item.itemEntity) == false
         ) {
-            revert InvalidItem(parentEntity, item.itemEntity);
+            revert InvalidItem(item.itemEntity);
         }
 
         // Run custom validation checks:
         // > Check that item is valid for parent
         // > Check that slot type is valid for implementor
-        if (!_isItemEquippable(parentEntity, item, traitsProvider)) {
-            revert InvalidItem(parentEntity, item.itemEntity);
+        if (!_isItemEquippable(parentEntity, item)) {
+            revert ItemNonEquippableToParent(parentEntity, item.itemEntity);
         }
     }
 
@@ -287,21 +218,10 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         uint256 existingItemEntity,
         Item calldata item
     ) internal {
-        ITraitsProvider traitsProvider = _traitsProvider();
-        uint256[] memory currentSlots = _getItems(
-            parentEntity,
-            item.slotType,
-            traitsProvider
-        );
+        uint256[] memory currentSlots = _getItems(parentEntity);
 
         // Validate item and parent are compatible
-        _requireValidItem(
-            account,
-            parentEntity,
-            existingItemEntity,
-            item,
-            traitsProvider
-        );
+        _requireValidItem(account, parentEntity, existingItemEntity, item);
 
         (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
             item.itemEntity
@@ -310,30 +230,8 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         // Burn the item when storing it in a slot
         ERC1155Burnable(tokenContract).burn(account, tokenId, 1);
 
-        // For now we do not mint items back to the user, but we can someday
-        // Check if slot is occupied and remove it if so
-        // if (currentSlots[item.slotIndex] != 0) {
-        //     _removeItem(
-        //         account,
-        //         parentEntity,
-        //         Item({
-        //             itemEntity: currentSlots[item.slotIndex],
-        //             slotType: item.slotType,
-        //             slotIndex: item.slotIndex
-        //         }),
-        //         traitsProvider
-        //     );
-        // }
-
-        // Set item in traits provider; for now this clobbers any equipped item
+        // Set item into the array and write to ItemsEquippedComponent
         currentSlots[item.slotIndex] = item.itemEntity;
-        (tokenContract, tokenId) = EntityLibrary.entityToToken(parentEntity);
-        traitsProvider.setTraitUint256Array(
-            tokenContract,
-            tokenId,
-            item.slotType,
-            currentSlots
-        );
         ItemsEquippedComponent(
             _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
         ).setValue(parentEntity, currentSlots);
@@ -345,41 +243,22 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
     function _removeItem(
         address,
         uint256 parentEntity,
-        Item memory item,
-        ITraitsProvider traitsProvider
+        Item memory item
     ) internal {
-        uint256[] memory slots = _getItems(
-            parentEntity,
-            item.slotType,
-            traitsProvider
-        );
+        uint256[] memory slots = _getItems(parentEntity);
 
         // Check equipped slot at slotIndex
         if (
             slots[item.slotIndex] == 0 ||
             slots[item.slotIndex] != item.itemEntity
         ) {
-            revert InvalidItem(parentEntity, item.itemEntity);
+            revert InvalidItem(item.itemEntity);
         }
 
-        // Remove item from slots
+        // Remove item from slots and write to ItemsEquippedComponent
         delete slots[item.slotIndex];
-
-        (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
-            parentEntity
-        );
-        traitsProvider.setTraitUint256Array(
-            tokenContract,
-            tokenId,
-            item.slotType,
-            slots
-        );
         ItemsEquippedComponent(
             _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
         ).setValue(parentEntity, slots);
-
-        // Default behavior is not to mint the item back to caller
-        // (tokenContract, tokenId) = EntityLibrary.entityToToken(item.itemEntity);
-        // IGameItems(tokenContract).mint(account, tokenId, 1);
     }
 }

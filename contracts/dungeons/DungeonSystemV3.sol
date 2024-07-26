@@ -5,8 +5,8 @@ import "../GameRegistryConsumerUpgradeable.sol";
 
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
-import {ILootSystem, ID as LOOT_SYSTEM_ID} from "../loot/ILootSystem.sol";
-import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
+
+import {ILootSystemV2, ID as LOOT_SYSTEM_V2_ID} from "../loot/ILootSystemV2.sol";
 import {RANDOMIZER_ROLE} from "../Constants.sol";
 import {EndBattleParams, IDungeonBattleSystemV2, ID as DUNGEON_BATTLE_SYSTEM_ID} from "./IDungeonBattleSystemV2.sol";
 import {IDungeonProgressSystem, ID as DUNGEON_PROGRESS_SYSTEM_ID, DungeonNodeProgressState} from "./IDungeonProgressSystem.sol";
@@ -17,11 +17,10 @@ import {CombatEncounterComponent, ID as CombatEncounterComponentId, Layout as Co
 import {CreatedTimestampComponent, ID as CREATED_TIMESTAMP_COMPONENT_ID} from "../generated/components/CreatedTimestampComponent.sol";
 import {GauntletScheduleComponent, ID as GauntletScheduleComponentId, Layout as GauntletScheduleComponentLayout, ID as GAUNTLET_SCHEDULE_ENTITY} from "../generated/components/GauntletScheduleComponent.sol";
 import {TransferStatusComponent, ID as TRANSFER_STATUS_COMPONENT_ID} from "../generated/components/TransferStatusComponent.sol";
-import {TransformInputComponent, Layout as TransformInputComponentLayout, ID as TRANSFORM_INPUT_COMPONENT_ID} from "../generated/components/TransformInputComponent.sol";
+import {TransformInputComponent, ID as TRANSFORM_INPUT_COMPONENT_ID} from "../generated/components/TransformInputComponent.sol";
 import {CountingSystem, ID as COUNTING_SYSTEM} from "../counting/CountingSystem.sol";
 import {IAccountXpSystem, ID as ACCOUNT_XP_SYSTEM_ID} from "../trade/IAccountXpSystem.sol";
-import {LootArrayComponent, ID as LOOT_ARRAY_COMPONENT_ID, Layout as LootArrayComponentLayout} from "../generated/components/LootArrayComponent.sol";
-import {LootEntityArrayComponent, ID as LOOT_ENTITY_ARRAY_COMPONENT_ID, Layout as LootEntityArrayComponentLayout} from "../generated/components/LootEntityArrayComponent.sol";
+import {ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {TransferLibrary, TransferStatus} from "../trade/TransferLibrary.sol";
 
@@ -264,7 +263,7 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
                 request,
                 randomWords[0],
                 _getDungeonNode(request.node).loots,
-                _lootSystem()
+                ILootSystemV2(_gameRegistry.getSystem(LOOT_SYSTEM_V2_ID))
             );
 
             // Delete the VRF request
@@ -276,11 +275,9 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
      * @inheritdoc IDungeonSystemV3
      */
     function getExtraTimeForDungeonCompletion() public view returns (uint256) {
-        return Uint256Component(
-            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
-        ).getValue(
-            DAILY_DUNGEONS_EXTRA_TIME_TO_COMPLETE
-        );
+        return
+            Uint256Component(_gameRegistry.getComponent(UINT256_COMPONENT_ID))
+                .getValue(DAILY_DUNGEONS_EXTRA_TIME_TO_COMPLETE);
     }
 
     /**
@@ -441,16 +438,12 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
         CombatEncounterComponentLayout memory encounter = encounterComponent
             .getLayoutValue(encounterEntity);
 
-        address lootArrayComponentAddress = _gameRegistry.getComponent(
-            LOOT_ARRAY_COMPONENT_ID
-        );
-
         return
             DungeonNode({
                 nodeId: encounterEntity,
                 enemies: encounter.enemyEntities,
-                loots: LootArrayComponentLibrary.convertLootArrayToLootSystem(
-                    lootArrayComponentAddress,
+                loots: LootArrayComponentLibrary.convertLootEntityArrayToLoot(
+                    _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID),
                     encounter.lootEntity
                 )
             });
@@ -499,8 +492,10 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
      * @dev Starts granting loot for a dungeon node, with or without VRF
      */
     function _grantLootBegin(LootRequest memory request) internal {
-        ILootSystem lootSystem = _lootSystem();
-        ILootSystem.Loot[] memory loots = _getDungeonNode(request.node).loots;
+        ILootSystemV2 lootSystem = ILootSystemV2(
+            _gameRegistry.getSystem(LOOT_SYSTEM_V2_ID)
+        );
+        ILootSystemV2.Loot[] memory loots = _getDungeonNode(request.node).loots;
 
         // Validate loots; returns true if VRF required.
         if (lootSystem.validateLoots(loots)) {
@@ -520,8 +515,8 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
     function _grantLootComplete(
         LootRequest memory request,
         uint256 randomWord,
-        ILootSystem.Loot[] memory loots,
-        ILootSystem lootSystem
+        ILootSystemV2.Loot[] memory loots,
+        ILootSystemV2 lootSystem
     ) internal {
         // Grant loot right away.
         lootSystem.grantLootWithRandomWord(request.account, loots, randomWord);

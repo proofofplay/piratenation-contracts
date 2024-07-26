@@ -19,6 +19,9 @@ error RequestAlreadyCompleted(uint256 requestId);
 /// @notice Error thrown when a request is executed out of order
 error RequestIsStale(uint256 requestId);
 
+/// @notice Error thrown when no valid values are available to set
+error NoValidValuesToSet();
+
 contract SubscriberSystem is GameRegistryConsumerUpgradeable {
     /**
      * Initializer for this upgradeable contract
@@ -103,6 +106,10 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
             filteredEntities[counter] = entities[i];
             filteredData[counter] = data[i];
             counter++;
+        }
+
+        if (counter == 0) {
+            revert NoValidValuesToSet();
         }
 
         // Trim arrays

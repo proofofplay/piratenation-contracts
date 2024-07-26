@@ -4,6 +4,7 @@ pragma solidity ^0.8.9;
 import "../GameRegistryConsumerUpgradeable.sol";
 
 import {DungeonNodeProgressState} from "./IDungeonProgressSystem.sol";
+import {ILootSystemV2} from "../loot/ILootSystemV2.sol";
 
 struct StartAndEndDungeonBattleParams {
     uint256 battleSeed;
@@ -39,7 +40,7 @@ struct DungeonMap {
 struct DungeonNode {
     uint256 nodeId;
     uint256[] enemies;
-    ILootSystem.Loot[] loots;
+    ILootSystemV2.Loot[] loots;
 }
 
 struct DungeonTrigger {

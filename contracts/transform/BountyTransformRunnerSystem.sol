@@ -6,7 +6,6 @@ import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import "../libraries/RandomLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
-import {PirateLibrary} from "../libraries/PirateLibrary.sol";
 
 import {GAME_LOGIC_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GENERATION_TRAIT_ID, LEVEL_TRAIT_ID, IS_PIRATE_TRAIT_ID} from "../Constants.sol";
 
