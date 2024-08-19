@@ -15,12 +15,12 @@ import {BountyTransformConfigComponent, Layout as BountyTransformConfigComponent
 import {LootEntityArrayComponent, Layout as LootEntityArrayComponentLayout} from "../generated/components/LootEntityArrayComponent.sol";
 import {BaseTransformRunnerSystem, TransformInputComponentLayout, TransformInstanceComponentLayout} from "./BaseTransformRunnerSystem.sol";
 import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_LIST_COMPONENT_ID} from "../generated/components/EntityListComponent.sol";
-import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {GenerationCheckComponent, Layout as GenerationCheckComponentLayout, ID as GENERATION_CHECK_COMPONENT_ID} from "../generated/components/GenerationCheckComponent.sol";
 import {TransformBountyTrackerComponent, Layout as TransformBountyTrackerComponentLayout, ID as TRANSFORM_BOUNTY_TRACKER_ID} from "../generated/components/TransformBountyTrackerComponent.sol";
 import {ParentComponent, ID as PARENT_COMPONENT_ID} from "../generated/components/ParentComponent.sol";
 import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
 import {CountingSystem, ID as COUNTING_SYSTEM_ID} from "../counting/CountingSystem.sol";
+import {GenerationComponent, ID as GENERATION_COMPONENT_ID} from "../generated/components/GenerationComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.bountytransformrunnersystem")
@@ -342,13 +342,14 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
             memory generationCheckComponent = GenerationCheckComponent(
                 _gameRegistry.getComponent(GENERATION_CHECK_COMPONENT_ID)
             ).getLayoutValue(parentEntity);
-
-        ITraitsProvider traitsProvider = _traitsProvider();
+        GenerationComponent generationComponent = GenerationComponent(
+            _gameRegistry.getComponent(GENERATION_COMPONENT_ID)
+        );
         for (uint256 i = 0; i < entityNfts.length; ++i) {
             // Check Pirate NFT
             _checkPirateNft(
                 transformInstanceEntity,
-                traitsProvider,
+                generationComponent,
                 generationCheckComponent,
                 bountyTrackerComponent,
                 entityNfts[i],
@@ -387,13 +388,12 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
 
     /**
      * Verifies that the NFT is owned by the user and is a Pirate NFT
-     * @param traitsProvider The TraitsProvider to use
      * @param entityId The entity ID of the NFT
      * @param account The account to check
      */
     function _checkPirateNft(
         uint256 transformInstanceEntity,
-        ITraitsProvider traitsProvider,
+        GenerationComponent generationComponent,
         GenerationCheckComponentLayout memory generationCheckComponent,
         TransformBountyTrackerComponent transformBountyTrackerComponent,
         uint256 entityId,
@@ -406,12 +406,7 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         if (account != IERC721(tokenContract).ownerOf(tokenId)) {
             revert NotNFTOwner();
         }
-
-        uint256 gen = traitsProvider.getTraitUint256(
-            tokenContract,
-            tokenId,
-            GENERATION_TRAIT_ID
-        );
+        uint256 gen = generationComponent.getValue(entityId);
         if (generationCheckComponent.required) {
             if (gen != generationCheckComponent.generation) {
                 revert InvalidGeneration();

@@ -10,6 +10,7 @@ import {StarterPirateNFT, ID as STARTER_PIRATE_NFT_ID} from "../tokens/starterpi
 import {ILootCallbackV2} from "../loot/ILootCallbackV2.sol";
 import {IERC165, GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
+import {TokenIdLibrary} from "../core/TokenIdLibrary.sol";
 
 import {LootTableComponent, Layout as LootTableComponentStruct, ID as LOOT_TABLE_COMPONENT_ID} from "../generated/components/LootTableComponent.sol";
 import {MintedStarterPirateComponent, Layout as MintedStarterPirateComponentStruct, ID as MINTED_STARTER_PIRATE_COMPONENT_ID} from "../generated/components/MintedStarterPirateComponent.sol";
@@ -104,7 +105,7 @@ contract StarterPirateSystemV2 is
         address wallet
     ) external whenNotPaused onlyRole(API_MINTER_ROLE) {
         address account = _getPlayerAccount(wallet);
-        _grantLoot(account, tokenTemplateId, 1, true);
+        _mintAndInitializeStarterPirate(account, tokenTemplateId, 1, true);
     }
 
     /**
@@ -115,7 +116,7 @@ contract StarterPirateSystemV2 is
         uint256 lootId,
         uint256 amount
     ) external onlyRole(MINTER_ROLE) whenNotPaused {
-        _grantLoot(account, lootId, amount, false);
+        _mintAndInitializeStarterPirate(account, lootId, amount, false);
     }
 
     /**
@@ -145,7 +146,12 @@ contract StarterPirateSystemV2 is
             currentNftId++;
 
             // Handle mint
-            randomWord = _handleMint(currentNftId, lootId, randomWord, account);
+            randomWord = _handleMintAndInitializeStarterPirate(
+                currentNftId,
+                lootId,
+                randomWord,
+                account
+            );
         }
 
         mintCounterComponent.setValue(ID, currentNftId);
@@ -156,7 +162,7 @@ contract StarterPirateSystemV2 is
     /**
      * @dev Helper batch mint function
      */
-    function batchMint(
+    function batchMintStarterPirates(
         address[] calldata accounts,
         uint256[] calldata tokenIds
     ) external onlyRole(MINTER_ROLE) whenNotPaused {
@@ -182,7 +188,7 @@ contract StarterPirateSystemV2 is
         if (request.account != address(0)) {
             uint256 randomWord = randomWords[0];
             // Set template ID
-            _handleMint(
+            _handleMintAndInitializeStarterPirate(
                 request.tokenId,
                 request.lootId,
                 randomWord,
@@ -215,7 +221,7 @@ contract StarterPirateSystemV2 is
      * @param account       Account to mint to
      * @param lootId        Token template id to mint
      */
-    function _grantLoot(
+    function _mintAndInitializeStarterPirate(
         address account,
         uint256 lootId,
         uint256 amount,
@@ -251,8 +257,8 @@ contract StarterPirateSystemV2 is
         mintCounterComponent.setValue(ID, currentNftId);
     }
 
-    function _handleMint(
-        uint256 tokenId,
+    function _handleMintAndInitializeStarterPirate(
+        uint256 _tokenId,
         uint256 lootId,
         uint256 randomWord,
         address account
@@ -262,6 +268,7 @@ contract StarterPirateSystemV2 is
         );
 
         // Mint starter pirate NFT
+        uint256 tokenId = TokenIdLibrary.generateTokenId(_tokenId);
         starterPirateNFT.mint(account, tokenId);
 
         uint256 entity = EntityLibrary.tokenToEntity(

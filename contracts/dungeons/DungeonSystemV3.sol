@@ -10,7 +10,7 @@ import {ILootSystemV2, ID as LOOT_SYSTEM_V2_ID} from "../loot/ILootSystemV2.sol"
 import {RANDOMIZER_ROLE} from "../Constants.sol";
 import {EndBattleParams, IDungeonBattleSystemV2, ID as DUNGEON_BATTLE_SYSTEM_ID} from "./IDungeonBattleSystemV2.sol";
 import {IDungeonProgressSystem, ID as DUNGEON_PROGRESS_SYSTEM_ID, DungeonNodeProgressState} from "./IDungeonProgressSystem.sol";
-import {StartAndEndDungeonBattleParams, StartDungeonBattleParams, EndDungeonBattleParams, IDungeonSystemV3, DungeonMap, DungeonNode, DungeonTrigger} from "./IDungeonSystemV3.sol";
+import {StartAndEndDungeonBattleParams, StartAndEndValidatedDungeonBattleParams, StartDungeonBattleParams, EndDungeonBattleParams, IDungeonSystemV3, DungeonMap, DungeonNode, DungeonTrigger} from "./IDungeonSystemV3.sol";
 import {AccountXpGrantedComponent, Layout as AccountXpGrantedComponentStruct, ID as ACCOUNT_XP_GRANTED_COMPONENT_ID} from "../generated/components/AccountXpGrantedComponent.sol";
 import {CombatMapComponent, ID as CombatMapComponentId, Layout as CombatMapComponentLayout} from "../generated/components/CombatMapComponent.sol";
 import {CombatEncounterComponent, ID as CombatEncounterComponentId, Layout as CombatEncounterComponentLayout} from "../generated/components/CombatEncounterComponent.sol";
@@ -24,6 +24,11 @@ import {ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/Loot
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {TransferLibrary, TransferStatus} from "../trade/TransferLibrary.sol";
 
+import {BanComponent, ID as BAN_COMPONENT_ID} from "../generated/components/BanComponent.sol";
+import {Banned} from "../ban/BanSystem.sol";
+
+import {BattleValidationComponent, ID as BATTLE_VALIDATION_COMPONENT_ID} from "../generated/components/BattleValidationComponent.sol";
+
 uint256 constant ID = uint256(keccak256("game.piratenation.dungeonsystem.v3"));
 
 // The margin of time (in seconds) the user has to complete a dungeon after
@@ -31,6 +36,9 @@ uint256 constant ID = uint256(keccak256("game.piratenation.dungeonsystem.v3"));
 uint256 constant DAILY_DUNGEONS_EXTRA_TIME_TO_COMPLETE = uint256(
     keccak256("game.piratenation.global.daily_dungeons.extra_time_to_complete")
 );
+
+// Role used by battle validator endpoint
+bytes32 constant BATTLE_VALIDATOR_ROLE = keccak256("BATTLE_VALIDATOR_ROLE");
 
 // Struct to track and respond to VRF requests
 struct LootRequest {
@@ -225,6 +233,13 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
         StartAndEndDungeonBattleParams calldata params
     ) external nonReentrant whenNotPaused {
         address account = _getPlayerAccount(_msgSender());
+        _startAndEndDungeonBattle(account, params);
+    }
+
+    function _startAndEndDungeonBattle(
+        address account,
+        StartAndEndDungeonBattleParams calldata params
+    ) private returns (uint256) {
         uint256 battleEntity = _startDungeonBattle(
             account,
             StartDungeonBattleParams({
@@ -246,6 +261,34 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
                 success: params.success
             })
         );
+
+        return battleEntity;
+    }
+
+    /**
+     * Submits a dungeon battle completion with supporting data to prove the battle was valid.
+     * @param params Data for an started and ended battle.
+     */
+    function startAndEndValidatedDungeonBattle(
+        StartAndEndDungeonBattleParams calldata params,
+        string calldata ipfsUrl,
+        address operatorWallet
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        onlyRole(BATTLE_VALIDATOR_ROLE)
+        returns (uint256)
+    {
+        address account = _getPlayerAccount(operatorWallet);
+
+        uint256 battleEntity = _startAndEndDungeonBattle(account, params);
+
+        BattleValidationComponent(
+            _gameRegistry.getComponent(BATTLE_VALIDATION_COMPONENT_ID)
+        ).setValue(battleEntity, ipfsUrl);
+
+        return battleEntity;
     }
 
     /**
@@ -859,6 +902,15 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
         address account,
         StartDungeonBattleParams memory params
     ) internal returns (uint256) {
+        // Can not start battles if banned.
+        if (
+            BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID)).getValue(
+                EntityLibrary.addressToEntity(account)
+            ) == true
+        ) {
+            revert Banned();
+        }
+
         // Validate
         _validateStartDungeonBattle(account, params);
         DungeonNode memory node = _getDungeonNode(params.encounterEntity);

@@ -78,7 +78,7 @@ abstract contract GameRegistryConsumerUpgradeable is
     /** ERRORS **/
 
     /// @notice Error if the game registry specified is invalid
-    error InvalidGameRegistry();
+    error InvalidGameRegistry(address gameRegistry);
 
     /** SETUP **/
 
@@ -97,7 +97,7 @@ abstract contract GameRegistryConsumerUpgradeable is
         _gameRegistry = IGameRegistry(gameRegistryAddress);
 
         if (gameRegistryAddress == address(0)) {
-            revert InvalidGameRegistry();
+            revert InvalidGameRegistry(gameRegistryAddress);
         }
 
         _paused = true;
@@ -140,7 +140,7 @@ abstract contract GameRegistryConsumerUpgradeable is
         _gameRegistry = IGameRegistry(gameRegistryAddress);
 
         if (gameRegistryAddress == address(0)) {
-            revert InvalidGameRegistry();
+            revert InvalidGameRegistry(gameRegistryAddress);
         }
     }
 

@@ -19,6 +19,8 @@ import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/B
 import {Banned} from "../../ban/BanSystem.sol";
 import {MixinComponent, Layout as MixinComponentLayout, ID as MIXIN_COMPONENT_ID} from "../../generated/components/MixinComponent.sol";
 import {SoulboundComponent, ID as SOULBOUND_COMPONENT_ID} from "../../generated/components/SoulboundComponent.sol";
+import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "../../generated/components/ChainIdComponent.sol";
+import {IMultichain721} from "../IMultichain721.sol";
 
 import {GAME_LOGIC_CONTRACT_ROLE, SOULBOUND_TRAIT_ID, MANAGER_ROLE} from "../../Constants.sol";
 
@@ -42,6 +44,7 @@ contract TradeableShipNFT is
     GameRegistryConsumerUpgradeable,
     IERC721Errors,
     TradeLicenseChecks,
+    IMultichain721,
     IERC2981
 {
     mapping(uint256 => address) private _tokenApprovals;
@@ -50,6 +53,8 @@ contract TradeableShipNFT is
     error InvalidEventEmitter();
 
     error InvalidValues();
+
+    error ERC721Soulbound();
 
     /**
      * Initializer for this upgradeable contract
@@ -81,7 +86,7 @@ contract TradeableShipNFT is
      * @inheritdoc IERC2981
      */
     function royaltyInfo(
-        uint256 _tokenId,
+        uint256,
         uint256 _salePrice
     ) public view virtual override returns (address, uint256) {
         // 10% royalty
@@ -278,6 +283,36 @@ contract TradeableShipNFT is
     }
 
     /**
+     * Used to rectify events from trade license exemption
+     * This will be used by Admins to create 'burn' events for items that were transferred in error
+     * that had trade license excemption.
+     * Does not actually burn any ships, but just emits the event so marketplaces can have correct totals.
+     */
+    function rectifyTransfers(
+        address from,
+        uint256[] calldata ids
+    ) external onlyRole(MANAGER_ROLE) {
+        for (uint256 i = 0; i < ids.length; i++) {
+            _emitTransferEvent(from, address(0), ids[i]);
+        }
+    }
+
+    /**
+     * Used to rectify events from trade license exemption, in batch format
+     * This will be used by Admins to create 'burn' events for items that were transferred in error
+     * that had trade license excemption.
+     * Does not actually burn any ships, but just emits the event so marketplaces can have correct totals.
+     */
+    function rectifyBatchTransfers(
+        address[] calldata from,
+        uint256[] calldata ids
+    ) external onlyRole(MANAGER_ROLE) {
+        for (uint256 i = 0; i < ids.length; i++) {
+            _emitTransferEvent(from[i], address(0), ids[i]);
+        }
+    }
+
+    /**
      * @dev See {IERC721-transferFrom}.
      */
     function transferFrom(
@@ -355,6 +390,21 @@ contract TradeableShipNFT is
             ShipNFT(_gameRegistry.getSystem(SHIP_NFT_ID)).tokenByIndex(index);
     }
 
+    /**
+     * @inheritdoc IMultichain721
+     */
+    function receivedMultichain721Transfer(
+        address to,
+        uint256 tokenId
+    ) external override {
+        //can only be called from gameRegistry
+        if (msg.sender != address(_gameRegistry)) {
+            revert InvalidGameRegistry(msg.sender);
+        }
+
+        ShipNFT(_gameRegistry.getSystem(SHIP_NFT_ID)).mint(to, tokenId);
+    }
+
     // Internal
     /**
      * @dev Returns whether `spender` is allowed to manage `owner`'s tokens, or `tokenId` in
@@ -402,6 +452,7 @@ contract TradeableShipNFT is
 
     /**
      * Emits a transfer event for a token transfer
+     * Will emit a multichain transfer if it's required.
      * @param from address of the sender
      * @param to address of the receiver
      * @param tokenId a list of tokenIds to transfer
@@ -411,7 +462,20 @@ contract TradeableShipNFT is
         address to,
         uint256 tokenId
     ) internal virtual {
-        emit Transfer(from, to, tokenId);
+        uint256 toChainId = _getChainId(to);
+
+        if (to != address(0) && toChainId != block.chainid) {
+            emit Transfer(from, address(0), tokenId); //burn the token on our chain
+            _gameRegistry.sendMultichain721Transfer(
+                ID,
+                from,
+                to,
+                tokenId,
+                toChainId
+            );
+        } else {
+            emit Transfer(from, to, tokenId);
+        }
     }
 
     /**
@@ -501,21 +565,36 @@ contract TradeableShipNFT is
     function _transferFrom(address from, address to, uint256 tokenId) internal {
         _checkOwnership(tokenId);
         _checkTradeLicense(from);
+        MixinComponent mixinComponent = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        );
+        bool isSoulbound = _checkIfSoulbound(mixinComponent, tokenId);
+        if (isSoulbound) {
+            revert ERC721Soulbound();
+        }
 
         ShipNFT shipNFT = ShipNFT(_gameRegistry.getSystem(SHIP_NFT_ID));
         shipNFT.burn(tokenId);
 
+        uint256 toChainId = _getChainId(to);
+
         // Mint the item unless there's a burn
-        if (to != address(0)) {
+        if (to != address(0) && toChainId == block.chainid) {
             shipNFT.mint(to, tokenId);
         }
 
         // If the recipent doesn't have trade license, we should emit an event that the item is burned. (So balances are kept on this contract)
-        if (!_hasTradeLicense(to)) {
+        if (!_hasTradeLicense(to) && toChainId == block.chainid) {
             to = address(0);
         }
 
         _emitTransferEvent(from, to, tokenId);
+    }
+
+    function _getChainId(address account) internal view returns (uint256) {
+        return
+            ChainIdComponent(_gameRegistry.getComponent(CHAIN_ID_COMPONENT_ID))
+                .getValue(EntityLibrary.addressToEntity(account));
     }
 
     /**

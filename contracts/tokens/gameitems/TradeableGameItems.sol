@@ -18,11 +18,12 @@ import {TradeLicenseChecks} from "../TradeLicenseChecks.sol";
 import {SOULBOUND_TRAIT_ID} from "../../Constants.sol";
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../../interfaces/ITraitsProvider.sol";
 import {TradeLicenseExemptComponent, ID as TRADE_LICENSE_EXEMPT_COMPONENT_ID} from "../../generated/components/TradeLicenseExemptComponent.sol";
-import {EntityLibrary} from "../../core/EntityLibrary.sol";
 import {TradeLibrary} from "../../trade/TradeLibrary.sol";
 import {IERC2981} from "@openzeppelin/contracts/interfaces/IERC2981.sol";
 import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/BanComponent.sol";
 import {Banned} from "../../ban/BanSystem.sol";
+import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "../../generated/components/ChainIdComponent.sol";
+import {IMultichain1155} from "../IMultichain1155.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.tradeablegameitems")
@@ -42,6 +43,7 @@ contract TradeableGameItems is
     TokenReentrancyGuardUpgradable,
     GameRegistryConsumerUpgradeable,
     TradeLicenseChecks,
+    IMultichain1155,
     IERC2981
 {
     using Arrays for uint256[];
@@ -100,7 +102,7 @@ contract TradeableGameItems is
      * @inheritdoc IERC2981
      */
     function royaltyInfo(
-        uint256 _tokenId,
+        uint256,
         uint256 _salePrice
     ) public view virtual override returns (address, uint256) {
         // 10% royalty
@@ -289,7 +291,12 @@ contract TradeableGameItems is
         // receiver ineligble, acts as a burn then on our system;
         // sender does have TL
         // receiver does not have TL and item is not-trade-exempt, emit burn
-        if (to != address(0) && !_hasTradeLicense(to) && !isTradeExempt) {
+        if (
+            to != address(0) &&
+            !_hasTradeLicense(to) &&
+            !isTradeExempt &&
+            _getChainId(to) == block.chainid
+        ) {
             _emitTransferEvent(from, address(0), ids, amounts);
             return;
         }
@@ -297,7 +304,7 @@ contract TradeableGameItems is
         // sender has TL or item is trade exempt
         // receiver has TL or item is trade exempt
         // emit standard transfer
-        _emitTransferEvent(from, to, ids, amounts);
+        _emitTransferOrMultichainTransfer(from, to, ids, amounts);
     }
 
     /**
@@ -365,8 +372,8 @@ contract TradeableGameItems is
 
         gameItems.burn(from, id, amount);
 
-        // Mint the item unless there's a burn
-        if (to != address(0)) {
+        // Mint the item unless there's a burn and its on the same chain
+        if (to != address(0) && _getChainId(to) == block.chainid) {
             gameItems.mint(to, id, amount);
         }
         (uint256[] memory ids, uint256[] memory amounts) = _asSingletonArrays(
@@ -375,10 +382,14 @@ contract TradeableGameItems is
         );
 
         // If the recipent doesn't have trade license, we should emit an event that the item is burned. (So balances are kept on this contract)
-        if (!_hasTradeLicense(to) && !_isTradeExempt(id)) {
+        if (
+            !_hasTradeLicense(to) &&
+            !_isTradeExempt(id) &&
+            _getChainId(to) == block.chainid
+        ) {
             _emitTransferEvent(from, address(0), ids, amounts);
         } else {
-            _emitTransferEvent(from, to, ids, amounts);
+            _emitTransferOrMultichainTransfer(from, to, ids, amounts);
         }
     }
 
@@ -421,36 +432,12 @@ contract TradeableGameItems is
         gameItems.burnBatch(from, ids, amounts);
 
         // If it's a burn, we don't need to mint on the original contract
-        if (to != address(0)) {
+        // We only mint if it's on same chain, otherwise multichain takes over
+        if (to != address(0) && _getChainId(to) == block.chainid) {
             gameItems.mintBatch(to, ids, amounts, data);
         }
 
-        // filter out any Ids that are tade exempt
-        uint256[] memory filteredIds = new uint256[](ids.length);
-        uint256[] memory filteredAmounts = new uint256[](amounts.length);
-
-        uint256 filteredIndex = 0;
-
-        for (uint256 i = 0; i < ids.length; i++) {
-            if (!_isTradeExempt(ids[i])) {
-                filteredIds[filteredIndex] = ids[i];
-                filteredAmounts[filteredIndex] = amounts[i];
-                filteredIndex++;
-            }
-        }
-
-        // Trim arrays
-        assembly {
-            mstore(filteredIds, filteredIndex)
-            mstore(filteredAmounts, filteredIndex)
-        }
-
-        // If the reciever has no trade license, we want to emit an event that the item is burned. (So balances are kept on this contract)
-        if (!_hasTradeLicense(to)) {
-            _emitTransferEvent(from, address(0), filteredIds, filteredAmounts);
-        } else {
-            _emitTransferEvent(from, to, ids, amounts);
-        }
+        _filterAndEmit(from, to, ids, amounts);
     }
 
     /**
@@ -491,10 +478,117 @@ contract TradeableGameItems is
         }
     }
 
+    /**
+     * @inheritdoc IMultichain1155
+     */
+    function receivedMultichain1155TransferSingle(
+        address to,
+        uint256 id,
+        uint256 amount
+    ) external override {
+        //can only be called from gameRegistry
+        if (msg.sender != address(_gameRegistry)) {
+            revert InvalidGameRegistry(msg.sender);
+        }
+
+        //mint the items
+        GameItems gameItems = GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID));
+        gameItems.mint(to, id, amount);
+    }
+
+    /**
+     * @inheritdoc IMultichain1155
+     */
+    function receivedMultichain1155TransferBatch(
+        address to,
+        uint256[] calldata ids,
+        uint256[] calldata amounts
+    ) external override {
+        //can only be called from gameRegistry
+        if (msg.sender != address(_gameRegistry)) {
+            revert InvalidGameRegistry(msg.sender);
+        }
+
+        //mint the items
+        GameItems gameItems = GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID));
+        gameItems.mintBatch(to, ids, amounts, "");
+    }
+
     // Internal
     /**
      * Checks if the token is soulbound or not and throws if it is.
      */
+    //todo: move this under
+    function _filterAndEmit(
+        address from,
+        address to,
+        uint256[] calldata ids,
+        uint256[] calldata amounts
+    ) private {
+        // filter out any Ids that are tade exempt
+        uint256[] memory filteredIds = new uint256[](ids.length);
+        uint256[] memory filteredAmounts = new uint256[](amounts.length);
+
+        uint256 filteredIndex = 0;
+
+        for (uint256 i = 0; i < ids.length; i++) {
+            if (!_isTradeExempt(ids[i])) {
+                filteredIds[filteredIndex] = ids[i];
+                filteredAmounts[filteredIndex] = amounts[i];
+                filteredIndex++;
+            }
+        }
+
+        // Trim arrays
+        assembly {
+            mstore(filteredIds, filteredIndex)
+            mstore(filteredAmounts, filteredIndex)
+        }
+
+        // If the reciever has no trade license, we want to emit an event that the item is burned. (So balances are kept on this contract)
+        if (!_hasTradeLicense(to) && _getChainId(to) == block.chainid) {
+            _emitTransferEvent(from, address(0), filteredIds, filteredAmounts);
+        } else {
+            _emitTransferOrMultichainTransfer(from, to, ids, amounts);
+        }
+    }
+
+    function _emitTransferOrMultichainTransfer(
+        address from,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts
+    ) private {
+        uint256 chainId = _getChainId(to);
+
+        if (chainId != block.chainid && to != address(0)) {
+            //if user is not on same chain burn and do multichain transfer
+            _emitTransferEvent(from, address(0), ids, amounts);
+            if (ids.length == 1) {
+                _gameRegistry.sendMultichain1155TransferSingle(
+                    ID,
+                    from,
+                    to,
+                    chainId,
+                    ids[0],
+                    amounts[0]
+                );
+            } else {
+                _gameRegistry.sendMultichain1155TransferBatch(
+                    ID,
+                    from,
+                    to,
+                    chainId,
+                    ids,
+                    amounts
+                );
+            }
+        } else {
+            // Here we check if sender if so we burn and emit new event
+            _emitTransferEvent(from, to, ids, amounts);
+        }
+    }
+
     function _checkSoulbound(uint256 tokenId) internal view returns (bool) {
         ITraitsProvider traitsProvider = ITraitsProvider(
             _gameRegistry.getSystem(TRAITS_PROVIDER_ID)
@@ -510,6 +604,12 @@ contract TradeableGameItems is
             return true;
         }
         return false;
+    }
+
+    function _getChainId(address account) internal view returns (uint256) {
+        return
+            ChainIdComponent(_gameRegistry.getComponent(CHAIN_ID_COMPONENT_ID))
+                .getValue(EntityLibrary.addressToEntity(account));
     }
 
     /**
@@ -583,6 +683,10 @@ contract TradeableGameItems is
         uint256[] memory amounts
     ) internal virtual {
         address operator = _msgSender();
+
+        if (from == to && from == address(0)) {
+            return;
+        }
 
         if (ids.length == 1) {
             emit TransferSingle(operator, from, to, ids[0], amounts[0]);

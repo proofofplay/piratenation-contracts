@@ -13,6 +13,7 @@ import {MintCounterComponent, ID as MINT_COUNTER_COMPONENT_ID} from "../generate
 
 import {IERC165, GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
+import {TokenIdLibrary} from "../core/TokenIdLibrary.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.shipsystem.v2"));
 
@@ -63,7 +64,7 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         uint256 lootId,
         uint256 amount
     ) external override(ILootCallbackV2) onlyRole(MINTER_ROLE) whenNotPaused {
-        _grantLoot(account, lootId, amount);
+        _mintAndInitializeLoot(account, lootId, amount);
     }
 
     /**
@@ -75,7 +76,7 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         uint256 amount,
         uint256 randomWord
     ) external onlyRole(MINTER_ROLE) returns (uint256) {
-        _grantLoot(account, lootId, amount);
+        _mintAndInitializeLoot(account, lootId, amount);
 
         return randomWord;
     }
@@ -97,12 +98,12 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
     }
 
     /**
-     * @notice Batch migrate ships
+     * @notice Batch mint ships with multichain tokenId support
      * @param accounts      Array of accounts to mint to
      * @param tokenIds      Array of tokenIds to mint
      * @param lootIds       Array of lootIds to mint (is the template id for the ship)
      */
-    function batchMigrateShips(
+    function batchMintShips(
         address[] calldata accounts,
         uint256[] calldata tokenIds,
         uint256[] calldata lootIds
@@ -140,7 +141,7 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
 
     /** INTERNAL **/
 
-    function _grantLoot(
+    function _mintAndInitializeLoot(
         address account,
         uint256 lootId,
         uint256 amount
@@ -161,14 +162,8 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         for (uint8 idx = 0; idx < amount; idx++) {
             // Increment current token id to next id
             currentShipId++;
-
-            _mintAndSetup(
-                shipNFT,
-                mixinComponent,
-                account,
-                currentShipId,
-                lootId
-            );
+            uint96 tokenId = TokenIdLibrary.generateTokenId(currentShipId);
+            _mintAndSetup(shipNFT, mixinComponent, account, tokenId, lootId);
         }
 
         mintCounterComponent.setValue(ID, currentShipId);
@@ -181,8 +176,6 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         uint256 tokenId,
         uint256 lootId
     ) internal {
-        shipNFT.mint(account, tokenId);
-
         // Set mixin component
         uint256[] memory mixins = new uint256[](1);
         mixins[0] = lootId;
@@ -191,5 +184,7 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
             EntityLibrary.tokenToEntity(address(shipNFT), tokenId),
             mixins
         );
+
+        shipNFT.mint(account, tokenId);
     }
 }

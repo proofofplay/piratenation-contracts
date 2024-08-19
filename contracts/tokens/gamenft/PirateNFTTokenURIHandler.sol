@@ -7,7 +7,6 @@ import {ContractTraits} from "../ContractTraits.sol";
 import {ITokenURIHandler} from "../ITokenURIHandler.sol";
 import {MANAGER_ROLE, ELEMENTAL_AFFINITY_TRAIT_ID, EXPERTISE_TRAIT_ID} from "../../Constants.sol";
 import {GameRegistryConsumerUpgradeable} from "../../GameRegistryConsumerUpgradeable.sol";
-import {IHoldingSystem, ID as HOLDING_SYSTEM_ID} from "../../holding/IHoldingSystem.sol";
 import {TokenURITrait, TraitDataType} from "../../interfaces/ITraitsProvider.sol";
 
 import "../../libraries/JSONRenderer.sol";
@@ -38,7 +37,7 @@ import {AvatarBaseMageGemComponent, ID as AVATAR_BASE_MAGE_GEM_COMPONENT_ID} fro
 import {DiceRollComponent, ID as DICE_ROLL_COMPONENT_ID} from "../../generated/components/DiceRollComponent.sol";
 import {StarSignComponent, ID as STAR_SIGN_COMPONENT_ID} from "../../generated/components/StarSignComponent.sol";
 import {GenerationComponent, ID as GENERATION_COMPONENT_ID} from "../../generated/components/GenerationComponent.sol";
-
+import {MilestonesClaimedComponent, ID as MILESTONES_CLAIMED_COMPONENT_ID} from "../../generated/components/MilestonesClaimedComponent.sol";
 import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../../generated/components/StringArrayComponent.sol";
 
 import {IComponent} from "../../core/components/IComponent.sol";
@@ -101,6 +100,10 @@ contract PirateNFTTokenURIHandler is
             numStaticTraits
         );
 
+        NameComponent nameComponent = NameComponent(
+            _gameRegistry.getComponent(NameComponentId)
+        );
+
         // Name
         baseTraits[0] = TokenURITrait({
             name: "name",
@@ -157,11 +160,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[4] = TokenURITrait({
             name: "Skin",
             value: abi.encode(
-                AvatarBaseSkinComponent(
-                    _gameRegistry.getComponent(AVATAR_BASE_SKIN_COMPONENT_ID)
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseSkinComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_SKIN_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -170,11 +177,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[5] = TokenURITrait({
             name: "Hair",
             value: abi.encode(
-                AvatarBaseHairComponent(
-                    _gameRegistry.getComponent(AVATAR_BASE_HAIR_COMPONENT_ID)
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseHairComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_HAIR_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -183,13 +194,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[6] = TokenURITrait({
             name: "Facial Hair",
             value: abi.encode(
-                AvatarBaseFacialHairComponent(
-                    _gameRegistry.getComponent(
-                        AVATAR_BASE_FACIAL_HAIR_COMPONENT_ID
-                    )
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseFacialHairComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_FACIAL_HAIR_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -198,11 +211,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[7] = TokenURITrait({
             name: "Coat",
             value: abi.encode(
-                AvatarBaseCoatComponent(
-                    _gameRegistry.getComponent(AVATAR_BASE_COAT_COMPONENT_ID)
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseCoatComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_COAT_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -211,13 +228,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[8] = TokenURITrait({
             name: "Character Type",
             value: abi.encode(
-                AvatarBaseCharacterTypeComponent(
-                    _gameRegistry.getComponent(
-                        AVATAR_BASE_CHARACTER_TYPE_COMPONENT_ID
-                    )
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseCharacterTypeComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_CHARACTER_TYPE_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -226,13 +245,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[9] = TokenURITrait({
             name: "Headwear",
             value: abi.encode(
-                AvatarBaseHeadwearComponent(
-                    _gameRegistry.getComponent(
-                        AVATAR_BASE_HEAD_WEAR_COMPONENT_ID
-                    )
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseHeadwearComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_HEAD_WEAR_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -241,11 +262,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[10] = TokenURITrait({
             name: "Earring",
             value: abi.encode(
-                AvatarBaseEarringComponent(
-                    _gameRegistry.getComponent(AVATAR_BASE_EARRING_COMPONENT_ID)
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseEarringComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_EARRING_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -254,13 +279,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[11] = TokenURITrait({
             name: "Eye Covering",
             value: abi.encode(
-                AvatarBaseEyeCoveringComponent(
-                    _gameRegistry.getComponent(
-                        AVATAR_BASE_EYE_COVERING_COMPONENT_ID
-                    )
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseEyeCoveringComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_EYE_COVERING_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -269,11 +296,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[12] = TokenURITrait({
             name: "Eyes",
             value: abi.encode(
-                AvatarBaseEyesComponent(
-                    _gameRegistry.getComponent(AVATAR_BASE_EYES_COMPONENT_ID)
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseEyesComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_EYES_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -282,28 +313,36 @@ contract PirateNFTTokenURIHandler is
         baseTraits[13] = TokenURITrait({
             name: "Hair Color",
             value: abi.encode(
-                AvatarBaseHairColorComponent(
-                    _gameRegistry.getComponent(
-                        AVATAR_BASE_HAIR_COLOR_COMPONENT_ID
-                    )
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseHairColorComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_HAIR_COLOR_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
 
-        // Mage Gem
+        // Mage Gem : Return "None" if value is 0
         baseTraits[14] = TokenURITrait({
             name: "Mage Gem",
-            value: abi.encode(
-                AvatarBaseMageGemComponent(
-                    _gameRegistry.getComponent(
-                        AVATAR_BASE_MAGE_GEM_COMPONENT_ID
+            value: AvatarBaseMageGemComponent(
+                _gameRegistry.getComponent(AVATAR_BASE_MAGE_GEM_COMPONENT_ID)
+            ).getValue(entity) == 0
+                ? abi.encode("None")
+                : abi.encode(
+                    nameComponent.getValue(
+                        AvatarBaseMageGemComponent(
+                            _gameRegistry.getComponent(
+                                AVATAR_BASE_MAGE_GEM_COMPONENT_ID
+                            )
+                        ).getValue(entity)
                     )
-                ).getValue(entity)
-            ),
-            dataType: TraitDataType.UINT,
+                ),
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -312,13 +351,15 @@ contract PirateNFTTokenURIHandler is
         baseTraits[15] = TokenURITrait({
             name: "Background",
             value: abi.encode(
-                AvatarBaseBackgroundComponent(
-                    _gameRegistry.getComponent(
-                        AVATAR_BASE_BACKGROUND_COMPONENT_ID
-                    )
-                ).getValue(entity)
+                nameComponent.getValue(
+                    AvatarBaseBackgroundComponent(
+                        _gameRegistry.getComponent(
+                            AVATAR_BASE_BACKGROUND_COMPONENT_ID
+                        )
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -353,11 +394,13 @@ contract PirateNFTTokenURIHandler is
         baseTraits[18] = TokenURITrait({
             name: "Star Sign",
             value: abi.encode(
-                StarSignComponent(
-                    _gameRegistry.getComponent(STAR_SIGN_COMPONENT_ID)
-                ).getValue(entity)
+                nameComponent.getValue(
+                    StarSignComponent(
+                        _gameRegistry.getComponent(STAR_SIGN_COMPONENT_ID)
+                    ).getValue(entity)
+                )
             ),
-            dataType: TraitDataType.UINT,
+            dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
         });
@@ -421,10 +464,9 @@ contract PirateNFTTokenURIHandler is
         baseTraits[24] = TokenURITrait({
             name: "Chests Claimed",
             value: abi.encode(
-                IHoldingSystem(_getSystem(HOLDING_SYSTEM_ID)).milestonesClaimed(
-                    tokenContract,
-                    tokenId
-                )
+                MilestonesClaimedComponent(
+                    _gameRegistry.getComponent(MILESTONES_CLAIMED_COMPONENT_ID)
+                ).getValue(entity).length
             ),
             dataType: TraitDataType.UINT,
             isTopLevelProperty: false,

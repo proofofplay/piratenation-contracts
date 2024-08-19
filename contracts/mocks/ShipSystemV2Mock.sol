@@ -11,6 +11,6 @@ contract ShipSystemV2Mock is ShipSystemV2 {
         uint256 lootId,
         uint256 amount
     ) external {
-        _grantLoot(account, lootId, amount);
+        _mintAndInitializeLoot(account, lootId, amount);
     }
 }

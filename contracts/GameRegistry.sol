@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT LICENSE
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -13,16 +13,25 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 import "@opengsn/contracts/src/interfaces/IERC2771Recipient.sol";
 
-import {PAUSER_ROLE, RANDOMIZER_ROLE, DEPOSITOR_ROLE, MANAGER_ROLE, MINTER_ROLE, GAME_CURRENCY_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_ITEMS_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE, TRUSTED_FORWARDER_ROLE, DEPLOYER_ROLE} from "./Constants.sol";
+import {PAUSER_ROLE, RANDOMIZER_ROLE, DEPOSITOR_ROLE, MANAGER_ROLE, MINTER_ROLE, GAME_CURRENCY_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_ITEMS_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE, TRUSTED_FORWARDER_ROLE, DEPLOYER_ROLE, TRUSTED_MULTICHAIN_ORACLE_ROLE} from "./Constants.sol";
 import "./core/IGameRegistry.sol";
 import {EntityLibrary} from "./core/EntityLibrary.sol";
 import {IComponent} from "./core/components/IComponent.sol";
 import {GUIDLibrary} from "./core/GUIDLibrary.sol";
 import {GuidCounterComponent, ID as GUID_COUNTER_COMPONENT_ID} from "./generated/components/GuidCounterComponent.sol";
+import {IMultichain1155} from "./tokens/IMultichain1155.sol";
+import {IMultichain721} from "./tokens/IMultichain721.sol";
+import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "./generated/components/ChainIdComponent.sol";
 
 // NOTE: Do NOT change ID if we wish to keep multi-chain GUID's in the same namespace
 uint256 constant ID = uint256(keccak256("game.piratenation.gameregistry.v1"));
 uint80 constant GUID_PREFIX = uint80(ID);
+
+struct BatchComponentData {
+    uint256[] entities;
+    uint256[] componentIds;
+    bytes[] data;
+}
 
 /** @title Contract to track and limit access by accounts in the same block */
 contract GameRegistry is
@@ -80,6 +89,9 @@ contract GameRegistry is
 
     /// @notice Flag to check if the GUID counter has been set
     bool private _guidCounterSet;
+
+    // @notice RequestID Mapping for cross-chain transfers
+    mapping(uint256 => bool) public requestIdProcessed;
 
     /** EVENTS **/
 
@@ -161,6 +173,16 @@ contract GameRegistry is
         bytes[] data
     );
 
+    /// @notice Emitted when a BatchComponentValueSet should be mirrored across chains
+    event PublishBatchSetComponentValue(
+        uint256 indexed requestId,
+        uint256[] componentIds,
+        uint256[] entities,
+        uint256 fromChainId,
+        uint256 requestTime,
+        bytes[] data
+    );
+
     /// @notice Emitted when a ComponentValueRemoved should be mirrored across chains
     // TODO: Reenable when we're ready to support cross-chain removal
     // event PublishComponentValueRemoved(
@@ -180,6 +202,66 @@ contract GameRegistry is
     //     uint256 requestTime,
     //     uint256[] entities
     // );
+
+    // 1155 Events
+    event Multichain1155TransferSingleSent(
+        uint256 requestId,
+        uint256 indexed systemId,
+        address indexed from,
+        address indexed to,
+        uint256 toChainId,
+        uint256 id,
+        uint256 amount
+    );
+
+    event Multichain1155TransferSingleReceived(
+        uint256 requestId,
+        uint256 indexed systemId,
+        address indexed from,
+        address indexed to,
+        uint256 fromChainId,
+        uint256 id,
+        uint256 amount
+    );
+
+    event Multichain1155TransferBatchSent(
+        uint256 requestId,
+        uint256 indexed systemId,
+        address indexed from,
+        address indexed to,
+        uint256 toChainId,
+        uint256[] ids,
+        uint256[] amounts
+    );
+
+    event Multichain1155TransferBatchReceived(
+        uint256 requestId,
+        uint256 indexed systemId,
+        address indexed from,
+        address indexed to,
+        uint256 fromChainId,
+        uint256[] ids,
+        uint256[] amounts
+    );
+
+    // 721 events
+    event Multichain721TransferSent(
+        uint256 requestId,
+        uint256 indexed systemId,
+        address indexed from,
+        address indexed to,
+        uint256 tokenId,
+        uint256 toChainId
+    );
+
+    event Multichain721TransferReceived(
+        uint256 requestId,
+        uint256 indexed systemId,
+        address indexed from,
+        address indexed to,
+        uint256 tokenId,
+        uint256 toChainId
+    );
 
     /** ERRORS **/
 
@@ -230,6 +312,15 @@ contract GameRegistry is
 
     /// @notice Guid counter already set
     error GuidCounterSet();
+
+    /// @notice Invalid System ID - The system ID must be registered.
+    error InvalidSystem(uint256 systemId);
+
+    /// @notice Invalid Chain ID - Must be processed on the correct Chain
+    error InvalidChain(uint256 chainId);
+
+    /// @notice Already Processed this request
+    error AlreadyProcessed(uint256 requestId);
 
     /** SETUP **/
 
@@ -369,9 +460,8 @@ contract GameRegistry is
     }
 
     /**
-     * Gets multiple component values at once
-     * @param entities Entities to get values for
-     * @param componentIds Component to get value from
+     * @inheritdoc IGameRegistry
+     * @dev Only registered components can call this function, otherwise it will revert
      */
     function batchGetComponentValues(
         uint256[] calldata entities,
@@ -388,16 +478,13 @@ contract GameRegistry is
     }
 
     /**
-     * Sets multiple component values at once
-     * @param entities Entities to set values for
-     * @param componentIds Component to set value on
-     * @param values Values to set
+     * @inheritdoc IGameRegistry
      */
     function batchSetComponentValue(
         uint256[] calldata entities,
         uint256[] calldata componentIds,
         bytes[] calldata values
-    ) external {
+    ) external override {
         if (
             hasAccessRole(GAME_LOGIC_CONTRACT_ROLE, _msgSender()) == false &&
             hasAccessRole(MANAGER_ROLE, _msgSender()) == false &&
@@ -406,20 +493,39 @@ contract GameRegistry is
             revert MissingRole(_msgSender(), GAME_LOGIC_CONTRACT_ROLE);
         }
 
+        _batchSetComponentValue(entities, componentIds, values);
+    }
+
+    /**
+     * @inheritdoc IGameRegistry
+     */
+    function batchPublishSetComponentValue(
+        uint256[] calldata entities,
+        uint256[] calldata componentIds,
+        bytes[] calldata values
+    ) external override returns (uint256 requestId) {
         if (
-            entities.length != values.length ||
-            entities.length != componentIds.length
+            hasAccessRole(GAME_LOGIC_CONTRACT_ROLE, _msgSender()) == false &&
+            hasAccessRole(MANAGER_ROLE, _msgSender()) == false &&
+            owner() != _msgSender()
         ) {
-            revert InvalidBatchData(entities.length, values.length);
+            revert MissingRole(_msgSender(), GAME_LOGIC_CONTRACT_ROLE);
         }
 
-        for (uint256 i = 0; i < entities.length; i++) {
-            address componentAddress = _componentIdToAddress[componentIds[i]];
-            if (componentAddress == address(0)) {
-                revert ComponentNotRegistered(componentAddress);
-            }
-            IComponent(componentAddress).setBytes(entities[i], values[i]);
-        }
+        _batchSetComponentValue(entities, componentIds, values);
+
+        requestId = _generateGUID();
+ 
+        emit PublishBatchSetComponentValue(
+            requestId,
+            componentIds,
+            entities,
+            block.chainid,
+            block.timestamp,
+            values
+        );
+
+        return requestId;
     }
 
     /**
@@ -565,6 +671,205 @@ contract GameRegistry is
         }
 
         emit BatchComponentValueRemoved(componentId, entities);
+    }
+
+    /**
+     * @notice Emits an event which oracles pick up to mint the item on another chian.
+     * @dev Only registered components can call this function, otherwise it will revert
+     */
+    function sendMultichain1155TransferSingle(
+        uint256 systemId,
+        address from,
+        address to,
+        uint256 toChainId,
+        uint256 id,
+        uint256 amount
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
+        if (to == address(0)) {
+            return;
+        }
+        uint256 requestId = _generateGUID();
+
+        if (address(_systemRegistry[systemId]) != msg.sender) {
+            revert InvalidSystem(systemId);
+        }
+        emit Multichain1155TransferSingleSent(
+            requestId,
+            systemId,
+            from,
+            to,
+            toChainId,
+            id,
+            amount
+        );
+    }
+
+    /**
+     * @notice Emits an event which oracles pick up to mint the item on another chian.
+     * @dev Only registered components can call this function, otherwise it will revert
+     */
+    function sendMultichain1155TransferBatch(
+        uint256 systemId,
+        address from,
+        address to,
+        uint256 toChainId,
+        uint256[] calldata ids,
+        uint256[] calldata amounts
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
+        if (to == address(0)) {
+            return;
+        }
+        uint256 requestId = _generateGUID();
+
+        if (address(_systemRegistry[systemId]) != msg.sender) {
+            revert InvalidSystem(systemId);
+        }
+        emit Multichain1155TransferBatchSent(
+            requestId,
+            systemId,
+            from,
+            to,
+            toChainId,
+            ids,
+            amounts
+        );
+    }
+
+    /**
+     * @notice Emits an event which oracles pick up to mint the item on another chian.
+     * @dev Only registered components can call this function, otherwise it will revert
+     */
+    function sendMultichain721Transfer(
+        uint256 systemId,
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 toChainId
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
+        if (to == address(0)) {
+            return;
+        }
+        uint256 requestId = _generateGUID();
+
+        if (address(_systemRegistry[systemId]) != msg.sender) {
+            revert InvalidSystem(systemId);
+        }
+        emit Multichain721TransferSent(
+            requestId,
+            systemId,
+            from,
+            to,
+            tokenId,
+            toChainId
+        );
+    }
+
+    /**
+     * @notice Delivers an item that has been transferred from another chain in the Multichain
+     * @dev Must be called by a trusted multichain
+     */
+    function deliverMultichain1155TransferSingle(
+        uint256 requestId,
+        uint256 systemId,
+        address from,
+        address to,
+        uint256 fromChainId,
+        uint256 id,
+        uint256 amount
+    ) external onlyRole(TRUSTED_MULTICHAIN_ORACLE_ROLE) {
+        _enforceChain(to);
+
+        //replay protection
+        _validateRequestId(requestId);
+
+        // mint items
+        if (_systemRegistry[systemId] == address(0)) {
+            revert InvalidSystem(systemId);
+        }
+        IMultichain1155 system = IMultichain1155(_systemRegistry[systemId]);
+        system.receivedMultichain1155TransferSingle(to, id, amount);
+
+        emit Multichain1155TransferSingleReceived(
+            requestId,
+            systemId,
+            from,
+            to,
+            fromChainId,
+            id,
+            amount
+        );
+    }
+
+    /**
+     * @notice Delivers an item that has been transferred from another chain in the Multichain
+     * @dev Must be called by a trusted multichain
+     */
+    function deliverMultichain1155TransferBatch(
+        uint256 requestId,
+        uint256 systemId,
+        address from,
+        address to,
+        uint256 fromChainId,
+        uint256[] calldata ids,
+        uint256[] calldata amounts
+    ) external onlyRole(TRUSTED_MULTICHAIN_ORACLE_ROLE) {
+        _enforceChain(to);
+
+        //replay protection
+        _validateRequestId(requestId);
+
+        // mint items
+        if (_systemRegistry[systemId] == address(0)) {
+            revert InvalidSystem(systemId);
+        }
+        IMultichain1155 system = IMultichain1155(_systemRegistry[systemId]);
+        system.receivedMultichain1155TransferBatch(to, ids, amounts);
+
+        emit Multichain1155TransferBatchReceived(
+            requestId,
+            systemId,
+            from,
+            to,
+            fromChainId,
+            ids,
+            amounts
+        );
+    }
+
+    /**
+     * @notice Delivers an item that has been transferred from another chain in the Multichain
+     * @dev Must be called by a trusted multichain
+     */
+    function deliverMultichain721Transfer(
+        uint256 requestId,
+        uint256 systemId,
+        address from,
+        address to,
+        uint256 tokenId,
+        uint256 fromChainId,
+        BatchComponentData calldata componentData
+    ) external onlyRole(TRUSTED_MULTICHAIN_ORACLE_ROLE) {
+        _enforceChain(to);
+
+        _validateRequestId(requestId);
+
+        if (_systemRegistry[systemId] == address(0)) {
+            revert InvalidSystem(systemId);
+        }
+        // mint items
+        IMultichain721 system = IMultichain721(_systemRegistry[systemId]);
+        system.receivedMultichain721Transfer(to, tokenId);
+
+        _batchSetComponentData(componentData);
+
+        emit Multichain721TransferReceived(
+            requestId,
+            systemId,
+            from,
+            to,
+            tokenId,
+            fromChainId
+        );
     }
 
     /**
@@ -946,5 +1251,84 @@ contract GameRegistry is
         uint256 count = counter.getValue(GUID_PREFIX) + 1;
         counter.setValue(GUID_PREFIX, count);
         return GUIDLibrary.packGuid(GUID_PREFIX, count);
+    }
+
+    function _enforceChain(address to) internal view {
+        uint256 userToChainId = ChainIdComponent(
+            _componentIdToAddress[CHAIN_ID_COMPONENT_ID]
+        ).getValue(EntityLibrary.addressToEntity(to));
+
+        if (userToChainId != block.chainid) {
+            revert InvalidChain(userToChainId);
+        }
+    }
+
+    function _validateRequestId(uint256 requestId) internal {
+        if (requestIdProcessed[requestId]) {
+            revert AlreadyProcessed(requestId);
+        }
+        requestIdProcessed[requestId] = true;
+    }
+
+    function _batchSetComponentData(
+        BatchComponentData calldata componentData
+    ) internal {
+        _batchSetComponentValue(
+            componentData.entities,
+            componentData.componentIds,
+            componentData.data
+        );
+    }
+
+    function _batchSetComponentValue(
+        uint256[] calldata entities,
+        uint256[] calldata componentIds,
+        bytes[] calldata values
+    ) internal {
+        if (
+            entities.length != values.length ||
+            entities.length != componentIds.length
+        ) {
+            revert InvalidBatchData(entities.length, values.length);
+        }
+
+        for (uint256 i = 0; i < entities.length; i++) {
+            address componentAddress = _componentIdToAddress[componentIds[i]];
+            if (componentAddress == address(0)) {
+                revert ComponentNotRegistered(componentAddress);
+            }
+            IComponent(componentAddress).setBytes(entities[i], values[i]);
+        }
+    }
+
+    function _batchSetComponentValueWithPublish(
+        uint256[] calldata entities,
+        uint256[] calldata componentIds,
+        bytes[] calldata values
+    ) internal {
+        if (
+            entities.length != values.length ||
+            entities.length != componentIds.length
+        ) {
+            revert InvalidBatchData(entities.length, values.length);
+        }
+
+        for (uint256 i = 0; i < entities.length; i++) {
+            address componentAddress = _componentIdToAddress[componentIds[i]];
+            if (componentAddress == address(0)) {
+                revert ComponentNotRegistered(componentAddress);
+            }
+
+            uint256 requestId = _generateGUID();
+            emit PublishComponentValueSet(
+                requestId,
+                componentIds[i],
+                entities[i],
+                block.chainid,
+                block.timestamp,
+                values[i]
+            );
+            IComponent(componentAddress).setBytes(entities[i], values[i]);
+        }
     }
 }

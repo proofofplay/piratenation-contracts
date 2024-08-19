@@ -46,6 +46,11 @@ bytes32 constant TRUSTED_FORWARDER_ROLE = keccak256("TRUSTED_FORWARDER_ROLE");
 // Trusted mirror role - Used by pirate mirroring
 bytes32 constant TRUSTED_MIRROR_ROLE = keccak256("TRUSTED_MIRROR_ROLE");
 
+// Trusted multichain oracle role - Used by multichain contracts
+bytes32 constant TRUSTED_MULTICHAIN_ORACLE_ROLE = keccak256(
+    "TRUSTED_MULTICHAIN_ORACLE_ROLE"
+);
+
 // =====
 // All of the possible traits in the system
 // =====

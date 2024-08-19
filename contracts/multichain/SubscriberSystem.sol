@@ -134,6 +134,32 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
+     * Delivers a BatchSetComponentValue request (Not to be confused with BatchComponentValueSet)
+     */
+    function deliverBatchSetComponentValue(
+        uint256 requestId,
+        uint256[] calldata componentIds,
+        uint256[] calldata entities,
+        uint256 requestTime,
+        bytes[] calldata datas
+    ) external whenNotPaused nonReentrant onlyRole(PUB_SUB_ORACLE_ROLE) {
+        // Check if request was already delivered before
+        if (_isDelivered(requestId)) {
+            revert RequestAlreadyCompleted(requestId);
+        }
+
+        _gameRegistry.batchSetComponentValue(entities, componentIds, datas);
+
+        // Mark request as completed
+        RequestLibrary.createRequestStatus(
+            _gameRegistry,
+            requestId,
+            requestTime,
+            RequestStatus.COMPLETED
+        );
+    }
+
+    /**
      * Checks if a request has been delivered
      *
      * @param requestId Request entity to check

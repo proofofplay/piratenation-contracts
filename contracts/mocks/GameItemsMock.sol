@@ -8,6 +8,7 @@ import "../tokens/gameitems/GameItems.sol";
 contract GameItemsMock is GameItems {
     // Minting for test environemnts
     function mintForTests(uint32 tokenId, uint256 amount) external {
-        _safeMint(_msgSender(), tokenId, amount);
+        address to = _gameRegistry.getPlayerAccount(_msgSender());
+        _safeMint(to, tokenId, amount);
     }
 }

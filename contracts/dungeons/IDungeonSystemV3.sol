@@ -16,6 +16,18 @@ struct StartAndEndDungeonBattleParams {
     bool success;
 }
 
+struct StartAndEndValidatedDungeonBattleParams {
+    uint256 battleSeed;
+    uint256 scheduledStart;
+    uint256 mapEntity;
+    uint256 encounterEntity;
+    uint256 shipEntity;
+    uint256[] shipOverloads;
+    string ipfsUrl;
+    string validationHash;
+    bool success;
+}
+
 struct StartDungeonBattleParams {
     uint256 battleSeed;
     uint256 scheduledStart;

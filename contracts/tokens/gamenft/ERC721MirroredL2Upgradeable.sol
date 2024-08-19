@@ -47,8 +47,18 @@ abstract contract ERC721MirroredL2Upgradeable is ERC721Upgradeable {
     ) external {
         _checkRole(TRUSTED_MIRROR_ROLE, _msgSender());
 
+       _mirrorOwnership(from, to, tokenId);
+    }
+
+    function _mirrorOwnership(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal {
         if (from == address(0x0)) {
             _mint(to, tokenId);
+        } else if (to == address(0x0)) {
+            _burn(tokenId);
         } else {
             _transfer(from, to, tokenId);
         }

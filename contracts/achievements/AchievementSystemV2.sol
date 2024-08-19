@@ -10,6 +10,7 @@ import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../generated/components/
 import {MintCounterComponent, ID as MINT_COUNTER_COMPONENT_ID} from "../generated/components/MintCounterComponent.sol";
 import {AchievedAtComponent, ID as ACHIEVED_AT_COMPONENT_ID} from "../generated/components/AchievedAtComponent.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
+import {TokenIdLibrary} from "../core/TokenIdLibrary.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.achievementsystem.v2")
@@ -77,13 +78,14 @@ contract AchievementSystemV2 is GameRegistryConsumerUpgradeable {
         uint256 currentId = mintCounterComponent.getValue(ID);
         currentId++;
 
+        uint96 tokenId = TokenIdLibrary.generateTokenId(currentId);
         uint256 entity = EntityLibrary.tokenToEntity(
             address(achievementNFT),
-            currentId
+            tokenId
         );
 
         // Mint the achievement
-        achievementNFT.mint(account, currentId);
+        achievementNFT.mint(account, tokenId);
         // Increment the counter
         mintCounterComponent.setValue(ID, currentId);
 
@@ -119,11 +121,12 @@ contract AchievementSystemV2 is GameRegistryConsumerUpgradeable {
 
         for (uint256 i = 0; i < accounts.length; i++) {
             currentId++;
-            achievementNFT.mint(accounts[i], currentId);
+            uint96 tokenId = TokenIdLibrary.generateTokenId(currentId);
+            achievementNFT.mint(accounts[i], tokenId);
             _setupAchievement(
                 MixinComponent(_gameRegistry.getComponent(MIXIN_COMPONENT_ID)),
                 mixinIds[i],
-                EntityLibrary.tokenToEntity(address(achievementNFT), currentId),
+                EntityLibrary.tokenToEntity(address(achievementNFT), tokenId),
                 achievedAtDates[i]
             );
         }
@@ -132,9 +135,9 @@ contract AchievementSystemV2 is GameRegistryConsumerUpgradeable {
     }
 
     /**
-     * Batch migrate achievements
+     * Batch mint achievements with multi-chain tokenId support
      */
-    function batchMigrateGrantAchievements(
+    function batchMintAchievements(
         BatchMigrateFields[] calldata fields
     ) external onlyRole(MANAGER_ROLE) whenNotPaused {
         if (fields.length == 0) {

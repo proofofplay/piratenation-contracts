@@ -5,7 +5,8 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 import {GameNFTV2Upgradeable, ITraitsProvider} from "./gamenft/GameNFTV2Upgradeable.sol";
 import {GENERATION_TRAIT_ID, XP_TRAIT_ID, IS_PIRATE_TRAIT_ID, LEVEL_TRAIT_ID, NAME_TRAIT_ID} from "../Constants.sol";
-import {MINTER_ROLE} from "../Constants.sol";
+import {MINTER_ROLE, TRUSTED_MIRROR_ROLE} from "../Constants.sol";
+import {BatchComponentData} from "../GameRegistry.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.piratenft"));
 
@@ -113,5 +114,19 @@ contract PirateNFTL2 is GameNFTV2Upgradeable {
             // Migrate the last transfer time for the token
             _setLastTransfer(tokenIds[i], lastTransferValues[i]);
         }
+    }
+
+    function mirrorOwnershipWithComponentData(
+        address from,
+        address to,
+        uint256 tokenId,
+        BatchComponentData calldata data
+    ) external onlyRole(TRUSTED_MIRROR_ROLE) {
+        _gameRegistry.batchSetComponentValue(
+            data.entities, 
+            data.componentIds,
+            data.data
+        );
+        _mirrorOwnership(from, to, tokenId);
     }
 }
