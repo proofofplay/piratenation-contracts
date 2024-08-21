@@ -22,6 +22,7 @@ import {GuidCounterComponent, ID as GUID_COUNTER_COMPONENT_ID} from "./generated
 import {IMultichain1155} from "./tokens/IMultichain1155.sol";
 import {IMultichain721} from "./tokens/IMultichain721.sol";
 import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "./generated/components/ChainIdComponent.sol";
+import {ArchivedComponent, ID as ARCHIVED_COMPONENT_ID} from "./generated/components/ArchivedComponent.sol";
 
 // NOTE: Do NOT change ID if we wish to keep multi-chain GUID's in the same namespace
 uint256 constant ID = uint256(keccak256("game.piratenation.gameregistry.v1"));
@@ -515,7 +516,7 @@ contract GameRegistry is
         _batchSetComponentValue(entities, componentIds, values);
 
         requestId = _generateGUID();
- 
+
         emit PublishBatchSetComponentValue(
             requestId,
             componentIds,
@@ -924,6 +925,34 @@ contract GameRegistry is
     }
 
     /**
+     * @dev Will filter out archived components and return only unarchived components
+     */
+    function getUnarchivedEntityComponents(
+        uint256 entity
+    ) external view returns (uint256[] memory) {
+        uint256[] memory componentIds = _entityToComponents[entity].values();
+        ArchivedComponent archivedComponent = ArchivedComponent(
+            _componentIdToAddress[ARCHIVED_COMPONENT_ID]
+        );
+        uint256[] memory unarchivedComponentIds = new uint256[](
+            componentIds.length
+        );
+
+        uint256 counter = 0;
+        for (uint256 i = 0; i < componentIds.length; i++) {
+            if (archivedComponent.getValue(componentIds[i])) {
+                continue;
+            }
+            unarchivedComponentIds[counter] = componentIds[i];
+            counter++;
+        }
+        assembly {
+            mstore(unarchivedComponentIds, counter)
+        }
+        return unarchivedComponentIds;
+    }
+
+    /**
      * @inheritdoc IGameRegistry
      */
     function getEntityComponentCount(
@@ -1297,37 +1326,6 @@ contract GameRegistry is
             if (componentAddress == address(0)) {
                 revert ComponentNotRegistered(componentAddress);
             }
-            IComponent(componentAddress).setBytes(entities[i], values[i]);
-        }
-    }
-
-    function _batchSetComponentValueWithPublish(
-        uint256[] calldata entities,
-        uint256[] calldata componentIds,
-        bytes[] calldata values
-    ) internal {
-        if (
-            entities.length != values.length ||
-            entities.length != componentIds.length
-        ) {
-            revert InvalidBatchData(entities.length, values.length);
-        }
-
-        for (uint256 i = 0; i < entities.length; i++) {
-            address componentAddress = _componentIdToAddress[componentIds[i]];
-            if (componentAddress == address(0)) {
-                revert ComponentNotRegistered(componentAddress);
-            }
-
-            uint256 requestId = _generateGUID();
-            emit PublishComponentValueSet(
-                requestId,
-                componentIds[i],
-                entities[i],
-                block.chainid,
-                block.timestamp,
-                values[i]
-            );
             IComponent(componentAddress).setBytes(entities[i], values[i]);
         }
     }
