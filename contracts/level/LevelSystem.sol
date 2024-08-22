@@ -10,10 +10,10 @@ import {ID as GOLD_TOKEN_STRATEGY_ID} from "../tokens/goldtoken/GoldTokenStrateg
 import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {Uint256ArrayComponent, ID as UINT256_ARRAY_COMPONENT_ID} from "../generated/components/Uint256ArrayComponent.sol";
 import {ICaptainSystem, ID as CAPTAIN_SYSTEM_ID} from "../captain/ICaptainSystem.sol";
-import {PERCENTAGE_RANGE, GAME_LOGIC_CONTRACT_ROLE, LEVEL_TRAIT_ID, XP_TRAIT_ID} from "../Constants.sol";
-import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
+import {PERCENTAGE_RANGE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
+import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComponent.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
@@ -22,12 +22,18 @@ import "../GameRegistryConsumerUpgradeable.sol";
 uint256 constant TOTAL_XP_FOR_LEVEL_ID = uint256(
     keccak256("game.piratenation.global.total_xp_to_level_up")
 );
-uint256 constant GOLD_TO_LEVEL_UP_ID = uint256(keccak256("game.piratenation.global.gold_to_level_up"));
+uint256 constant GOLD_TO_LEVEL_UP_ID = uint256(
+    keccak256("game.piratenation.global.gold_to_level_up")
+);
 uint256 constant CAPTAIN_XP_BONUS_PERCENT_ID = uint256(
     keccak256("game.piratenation.global.captain_xp_bonus_percent")
 );
-uint256 constant MAX_XP_ID = uint256(keccak256("game.piratenation.global.max_xp"));
-uint256 constant MAX_LEVEL_ID = uint256(keccak256("game.piratenation.global.max_level"));
+uint256 constant MAX_XP_ID = uint256(
+    keccak256("game.piratenation.global.max_xp")
+);
+uint256 constant MAX_LEVEL_ID = uint256(
+    keccak256("game.piratenation.global.max_level")
+);
 
 /// @title LevelSystem
 /// Lets the player level up
@@ -55,6 +61,9 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
     /// @notice Trying to level past max level
     error DesiredLevelExceedsMaxLevel(uint256 maxLevel, uint256 desiredLevel);
 
+    // @notice is not a pirate
+    error IsNotPirate();
+
     /** SETUP **/
 
     /**
@@ -81,64 +90,56 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
         uint32 desiredLevel
     ) external whenNotPaused nonReentrant {
         address account = _getPlayerAccount(_msgSender());
-        ITraitsProvider traitsProvider = ITraitsProvider(
-            _getSystem(TRAITS_PROVIDER_ID)
-        );
 
         // Owner check
         if (IERC721(nftContract).ownerOf(nftTokenId) != account) {
             revert NotOwner();
         }
 
-        uint256 currentLevel = traitsProvider.getTraitUint256(
-            nftContract,
-            nftTokenId,
-            LEVEL_TRAIT_ID
-        );
+        uint256 entityId = EntityLibrary.tokenToEntity(nftContract, nftTokenId);
+
+        if (
+            IsPirateComponent(
+                _gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID)
+            ).getValue(entityId) == false
+        ) {
+            revert IsNotPirate();
+        }
+
+        uint256 currentLevel = LevelComponent(
+            _gameRegistry.getComponent(LEVEL_COMPONENT_ID)
+        ).getValue(entityId);
 
         if (currentLevel >= desiredLevel) {
             revert MustUpgradeToHigherLevel();
         }
 
-
         uint256[] memory xpTable = Uint256ArrayComponent(
             _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
-        ).getValue(
-            TOTAL_XP_FOR_LEVEL_ID
-        );
+        ).getValue(TOTAL_XP_FOR_LEVEL_ID);
 
         uint256 maxLevel = Uint256Component(
             _gameRegistry.getComponent(UINT256_COMPONENT_ID)
         ).getValue(MAX_LEVEL_ID);
+
         if (desiredLevel >= xpTable.length || desiredLevel > maxLevel) {
             revert DesiredLevelExceedsMaxLevel(xpTable.length, desiredLevel);
         }
 
         uint256 xpRequired = xpTable[desiredLevel];
-        uint256 xpForPirate = traitsProvider.getTraitUint256(
-            nftContract,
-            nftTokenId,
-            XP_TRAIT_ID
-        );
 
-        if (xpForPirate < xpRequired) {
+        uint256 currentXp = XpComponent(
+            _gameRegistry.getComponent(XP_COMPONENT_ID)
+        ).getValue(entityId);
+
+        if (currentXp < xpRequired) {
             revert NeedMoreXP();
         }
 
         // Burn the gold needed to upgrade
         _burnGold(account, currentLevel, desiredLevel);
 
-        // TODO: Remove after full migration to componennts
-        // Increment level trait
-        traitsProvider.incrementTrait(
-            nftContract,
-            nftTokenId,
-            LEVEL_TRAIT_ID,
-            desiredLevel - currentLevel
-        );
-
         // Set level component value
-        uint256 entityId = EntityLibrary.tokenToEntity(nftContract, nftTokenId);
         LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID)).setValue(
                 entityId,
                 desiredLevel
@@ -180,36 +181,22 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
         ) {
             amount =
                 amount +
-                (amount * uint256Component.getValue(CAPTAIN_XP_BONUS_PERCENT_ID)) /
+                (amount *
+                    uint256Component.getValue(CAPTAIN_XP_BONUS_PERCENT_ID)) /
                 PERCENTAGE_RANGE;
         }
 
-        ITraitsProvider traitsProvider = ITraitsProvider(
-            _getSystem(TRAITS_PROVIDER_ID)
-        );
+        // Set XP component
+        uint256 entityId = EntityLibrary.tokenToEntity(tokenContract, tokenId);
 
         // Cap XP
         uint256 maxXp = uint256Component.getValue(MAX_XP_ID);
-        uint256 currentXp = traitsProvider.getTraitUint256(
-            tokenContract,
-            tokenId,
-            XP_TRAIT_ID
-        );
+        uint256 currentXp = XpComponent(
+            _gameRegistry.getComponent(XP_COMPONENT_ID)
+        ).getValue(entityId);
+
         amount = Math.min(maxXp - currentXp, amount);
         if (amount > 0) {
-            // TODO: Remove after full migration to componennts
-            traitsProvider.incrementTrait(
-                tokenContract,
-                tokenId,
-                XP_TRAIT_ID,
-                amount
-            );
-
-            // Set XP component
-            uint256 entityId = EntityLibrary.tokenToEntity(
-                tokenContract,
-                tokenId
-            );
             XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID)).setValue(
                 entityId,
                 currentXp + amount
@@ -227,9 +214,7 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
 
         uint256[] memory goldTable = Uint256ArrayComponent(
             _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
-        ).getValue(
-            GOLD_TO_LEVEL_UP_ID
-        );
+        ).getValue(GOLD_TO_LEVEL_UP_ID);
 
         if (desiredLevel >= goldTable.length) {
             revert DesiredLevelExceedsMaxLevel(goldTable.length, desiredLevel);

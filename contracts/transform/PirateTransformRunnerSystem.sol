@@ -5,7 +5,7 @@ pragma solidity ^0.8.13;
 import "../libraries/RandomLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 
-import {GAME_LOGIC_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GENERATION_TRAIT_ID, LEVEL_TRAIT_ID, IS_PIRATE_TRAIT_ID} from "../Constants.sol";
+import {GAME_LOGIC_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE} from "../Constants.sol";
 
 import {ILevelSystem, ID as LEVEL_SYSTEM_ID} from "../level/ILevelSystem.sol";
 import {IEnergySystemV3, ID as ENERGY_SYSTEM_ID} from "../energy/IEnergySystem.sol";
@@ -15,6 +15,7 @@ import {LootEntityArrayComponent, Layout as LootEntityArrayComponentLayout} from
 import {BaseTransformRunnerSystem, TransformInputComponentLayout, TransformInstanceComponentLayout} from "./BaseTransformRunnerSystem.sol";
 import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 import {GenerationComponent, ID as GENERATION_COMPONENT_ID} from "../generated/components/GenerationComponent.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
 
@@ -203,21 +204,19 @@ contract PirateTransformRunnerSystem is BaseTransformRunnerSystem {
             revert FirstInputMustBePirateNFT();
         }
 
+        uint256 entityId = EntityLibrary.tokenToEntity(tokenContract, tokenId);
+
         // Get pirate level
-        // TODO: replace this with LevelComponent read once we're fully migrated
         uint32 pirateLevel = uint32(
-            _traitsProvider().getTraitUint256(
-                tokenContract,
-                tokenId,
-                LEVEL_TRAIT_ID
-            )
+            LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID))
+                .getValue(entityId)
         );
 
         // Get pirate generation
         uint32 pirateGeneration = uint32(
             GenerationComponent(
                 _gameRegistry.getComponent(GENERATION_COMPONENT_ID)
-            ).getValue(EntityLibrary.tokenToEntity(tokenContract, tokenId))
+            ).getValue(entityId)
         );
 
         // Check pirate level

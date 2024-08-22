@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT LICENSE
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.13;
 
 import "../level/LevelSystem.sol";
 
@@ -18,6 +18,8 @@ contract LevelSystemMock is LevelSystem {
             _getSystem(CAPTAIN_SYSTEM_ID)
         );
 
+        uint256 entityId = EntityLibrary.tokenToEntity(tokenContract, tokenId);
+
         Uint256Component uint256Component = Uint256Component(
             _gameRegistry.getComponent(UINT256_COMPONENT_ID)
         );
@@ -32,28 +34,22 @@ contract LevelSystemMock is LevelSystem {
         ) {
             amount =
                 amount +
-                (amount * uint256Component.getValue(CAPTAIN_XP_BONUS_PERCENT_ID)) /
+                (amount *
+                    uint256Component.getValue(CAPTAIN_XP_BONUS_PERCENT_ID)) /
                 PERCENTAGE_RANGE;
         }
 
-        ITraitsProvider traitsProvider = ITraitsProvider(
-            _getSystem(TRAITS_PROVIDER_ID)
-        );
-
         // Cap XP
         uint256 maxXp = uint256Component.getValue(MAX_XP_ID);
-        uint256 currentXp = traitsProvider.getTraitUint256(
-            tokenContract,
-            tokenId,
-            XP_TRAIT_ID
-        );
+        uint256 currentXp = XpComponent(
+            _gameRegistry.getComponent(XP_COMPONENT_ID)
+        ).getValue(entityId);
+
         amount = Math.min(maxXp - currentXp, amount);
         if (amount > 0) {
-            traitsProvider.incrementTrait(
-                tokenContract,
-                tokenId,
-                XP_TRAIT_ID,
-                amount
+            XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID)).setValue(
+                entityId,
+                currentXp + amount
             );
         }
     }
