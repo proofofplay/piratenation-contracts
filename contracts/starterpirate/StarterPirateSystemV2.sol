@@ -26,6 +26,7 @@ import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/
 import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComponent.sol";
 import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../generated/components/StringArrayComponent.sol";
+import {BatchComponentData} from "../GameRegistry.sol";
 
 // TODO: Remove once we finish component migration
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
@@ -212,6 +213,23 @@ contract StarterPirateSystemV2 is
         bytes4 interfaceId
     ) public view virtual override(IERC165) returns (bool) {
         return interfaceId == type(ILootCallbackV2).interfaceId;
+    }
+
+    function migrationMint(
+        address account,
+        uint256 tokenId,
+        BatchComponentData calldata data
+    ) external onlyRole(MANAGER_ROLE) whenNotPaused {
+        StarterPirateNFT starterPirateNFT = StarterPirateNFT(
+            _getSystem(STARTER_PIRATE_NFT_ID)
+        );
+
+        starterPirateNFT.mint(account, tokenId);
+        _gameRegistry.batchSetComponentValue(
+            data.entities,
+            data.componentIds,
+            data.data
+        );
     }
 
     /** INTERNAL **/

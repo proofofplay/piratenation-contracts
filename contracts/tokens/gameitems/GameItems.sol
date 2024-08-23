@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT LICENSE
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.13;
 
 import {ERC1155Upgradeable, ContextUpgradeable, IERC1155Upgradeable, IERC165Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
 
@@ -9,6 +9,8 @@ import {IGameItems, ID} from "./IGameItems.sol";
 import {TraitsConsumerUpgradeable, GameRegistryConsumerUpgradeable} from "../../traits/TraitsConsumerUpgradeable.sol";
 
 import {IERC1155BeforeTokenTransferHandler} from "../IERC1155BeforeTokenTransferHandler.sol";
+import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "../../generated/components/ChainIdComponent.sol";
+import {EntityLibrary} from "../../core/EntityLibrary.sol";
 
 /** @title ERC1155 contract for Game Items */
 contract GameItems is
@@ -18,10 +20,10 @@ contract GameItems is
 {
     /** TYPES **/
     struct TypeInfo {
-        bool recyclable;
+        bool recyclable; //deprecated
         uint256 mints;
         uint256 burns;
-        uint256 maxSupply;
+        uint256 maxSupply; //deprecated
     }
 
     /** MEMBERS **/
@@ -80,7 +82,9 @@ contract GameItems is
      *
      * @param _uri New contract URI
      */
-    function setContractURI(string calldata _uri) public onlyRole(MANAGER_ROLE) {
+    function setContractURI(
+        string calldata _uri
+    ) public onlyRole(MANAGER_ROLE) {
         _contractURI = _uri;
         emit ContractURIUpdated(_uri);
     }
@@ -187,6 +191,9 @@ contract GameItems is
         uint256[] memory ids,
         uint256[] memory amounts
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) whenNotPaused {
+        for (uint256 i = 0; i < ids.length; i++) {
+            typeInfo[ids[i]].burns += amounts[i];
+        }
         _burnBatch(from, ids, amounts);
     }
 
@@ -201,7 +208,6 @@ contract GameItems is
         if (typeInfo[id].maxSupply == 0) {
             revert InvalidTokenId();
         }
-
         return typeInfo[id];
     }
 
@@ -260,18 +266,6 @@ contract GameItems is
     function _safeMint(address to, uint256 id, uint256 amount) internal {
         TypeInfo storage typeData = typeInfo[id];
 
-        if (typeData.recyclable) {
-            uint256 needed = typeData.mints - typeData.burns + amount;
-            if (needed > typeData.maxSupply) {
-                revert NotEnoughSupply(needed, typeData.maxSupply);
-            }
-        } else {
-            uint256 needed = typeData.mints + amount;
-            if (needed > typeData.maxSupply) {
-                revert NotEnoughSupply(needed, typeData.maxSupply);
-            }
-        }
-
         typeData.mints += amount;
         _mint(to, id, amount, "");
     }
@@ -303,6 +297,28 @@ contract GameItems is
         }
 
         super._beforeTokenTransfer(operator, from, to, ids, amounts, data);
+    }
+
+    function _afterTokenTransfer(
+        address,
+        address,
+        address to,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory
+    ) internal virtual override {
+        if (
+            to != address(0) &&
+            ChainIdComponent(_gameRegistry.getComponent(CHAIN_ID_COMPONENT_ID))
+                .getValue(EntityLibrary.addressToEntity(to)) !=
+            block.chainid
+        ) {
+            for (uint256 i = 0; i < ids.length; i++) {
+                typeInfo[ids[i]].burns += amounts[i];
+            }
+            // User is on another chain, burn items as they will be minted there by Multichain System
+            _burnBatch(to, ids, amounts);
+        }
     }
 
     /**

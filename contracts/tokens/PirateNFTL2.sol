@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 import {GameNFTV2Upgradeable, ITraitsProvider} from "./gamenft/GameNFTV2Upgradeable.sol";
 import {GENERATION_TRAIT_ID, XP_TRAIT_ID, IS_PIRATE_TRAIT_ID, LEVEL_TRAIT_ID, NAME_TRAIT_ID} from "../Constants.sol";
-import {MINTER_ROLE, TRUSTED_MIRROR_ROLE} from "../Constants.sol";
+import {MINTER_ROLE, TRUSTED_MIRROR_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {BatchComponentData} from "../GameRegistry.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.piratenft"));
@@ -123,10 +123,37 @@ contract PirateNFTL2 is GameNFTV2Upgradeable {
         BatchComponentData calldata data
     ) external onlyRole(TRUSTED_MIRROR_ROLE) {
         _gameRegistry.batchSetComponentValue(
-            data.entities, 
+            data.entities,
             data.componentIds,
             data.data
         );
         _mirrorOwnership(from, to, tokenId);
+    }
+
+    /**
+     * Burn a token - any payment / game logic should be handled in the game contract.
+     *
+     * @param id        Id of the token to burn
+     */
+    function burn(
+        uint256 id
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) whenNotPaused {
+        _burn(id);
+    }
+
+    /**
+     * Burn multiple tokens in batches
+     *
+     * @param ids        Ids of the tokens to burn
+     */
+    function burnBatch(
+        uint256[] memory ids
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) whenNotPaused {
+        if (ids.length == 0) {
+            revert InvalidInput();
+        }
+        for (uint256 i = 0; i < ids.length; ++i) {
+            _burn(ids[i]);
+        }
     }
 }

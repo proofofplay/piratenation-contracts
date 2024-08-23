@@ -11,6 +11,7 @@ import {MintCounterComponent, ID as MINT_COUNTER_COMPONENT_ID} from "../generate
 import {AchievedAtComponent, ID as ACHIEVED_AT_COMPONENT_ID} from "../generated/components/AchievedAtComponent.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {TokenIdLibrary} from "../core/TokenIdLibrary.sol";
+import {BatchComponentData} from "../GameRegistry.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.achievementsystem.v2")
@@ -157,6 +158,31 @@ contract AchievementSystemV2 is GameRegistryConsumerUpgradeable {
                     fields[i].tokenId
                 ),
                 fields[i].achievedAtDate
+            );
+        }
+    }
+
+    function batchMigrationMint(
+        address[] calldata accounts,
+        uint256[] calldata tokenIds,
+        BatchComponentData[] calldata data
+    ) external onlyRole(MANAGER_ROLE) whenNotPaused {
+        if (
+            accounts.length != tokenIds.length || accounts.length != data.length
+        ) {
+            revert InvalidParameters();
+        }
+
+        IAchievementNFT achievementNFT = IAchievementNFT(
+            _getSystem(ACHIEVEMENT_NFT_ID)
+        );
+
+        for (uint256 i = 0; i < accounts.length; i++) {
+            achievementNFT.mint(accounts[i], tokenIds[i]);
+            _gameRegistry.batchSetComponentValue(
+                data[i].entities,
+                data[i].componentIds,
+                data[i].data
             );
         }
     }

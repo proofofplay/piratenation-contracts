@@ -15,6 +15,8 @@ contract StarterPirateNFT is GameNFTV2Upgradeable {
     // 0 max supply = infinite
     uint256 constant MAX_SUPPLY = 0;
 
+    error InvalidInput();
+
     /** SETUP */
     constructor() {
         // Do nothing
@@ -69,5 +71,21 @@ contract StarterPirateNFT is GameNFTV2Upgradeable {
         uint256 id
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) whenNotPaused {
         _burn(id);
+    }
+
+    /**
+     * Burn multiple tokens in batches
+     *
+     * @param ids        Ids of the tokens to burn
+     */
+    function burnBatch(
+        uint256[] memory ids
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) whenNotPaused {
+        if (ids.length == 0) {
+            revert InvalidInput();
+        }
+        for (uint256 i = 0; i < ids.length; i++) {
+            _burn(ids[i]);
+        }
     }
 }

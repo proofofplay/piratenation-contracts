@@ -9,9 +9,7 @@ import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeabl
 import {ITokenTemplateSystem, ID as TOKEN_TEMPLATE_SYSTEM_ID} from "../tokens/ITokenTemplateSystem.sol";
 import {MANAGER_ROLE} from "../Constants.sol";
 import {AccountStarterIslandComponent, ID as ACCOUNT_STARTER_ISLAND_COMPONENT_ID} from "../generated/components/AccountStarterIslandComponent.sol";
-import {IslandSystem, ID as ISLAND_SYSTEM_ID} from "./IslandSystem.sol";
-import {CounterComponent, ID as COUNTER_COMPONENT_ID} from "../generated/components/CounterComponent.sol";
-import {BoolComponent, ID as BOOL_COMPONENT_ID} from "../generated/components/BoolComponent.sol";
+import {GUIDLibrary} from "../core/GUIDLibrary.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.islandspawnsystem"));
 
@@ -64,24 +62,7 @@ contract IslandSpawnSystem is OwnerSystem {
             revert IslandAlreadySpawned(sceneEntity);
         }
 
-        CounterComponent counterComponent = CounterComponent(
-            _gameRegistry.getComponent(COUNTER_COMPONENT_ID)
-        );
-        BoolComponent boolComponent = BoolComponent(
-            _gameRegistry.getComponent(BOOL_COMPONENT_ID)
-        );
-        bool switchCounter = boolComponent.getValue(ID);
-        uint256 currentCount = counterComponent.getValue(ID);
-        currentCount++;
-
-        // Generate a sceneEntity and set it to the account.
-        // Use _islandTokenIdCounter.increment() if switchCounter is false
-        if (switchCounter == false) {
-            _islandTokenIdCounter.increment();
-            currentCount = _islandTokenIdCounter.current();
-        }
-        counterComponent.setValue(ID, currentCount);
-        sceneEntity = EntityLibrary.tokenToEntity(address(this), currentCount);
+        sceneEntity = GUIDLibrary.guid(_gameRegistry, uint80(ID));
 
         starterIsland.setValue(accountEntity, sceneEntity);
 

@@ -8,6 +8,7 @@ import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {ITraitsProvider} from "../interfaces/ITraitsProvider.sol";
 import {SceneObjectGameItemComponent, ID as SCENE_OBJECT_GAME_ITEM_COMPONENT_ID} from "../generated/components/SceneObjectGameItemComponent.sol";
+import {GUIDLibrary} from "../core/GUIDLibrary.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.placeablesceneobjectsystem")
@@ -106,8 +107,8 @@ contract PlaceableSceneObjectSystem is GameRegistryConsumerUpgradeable {
             revert ItemNotPlaceable(tokenContract, tokenId);
         }
 
-        // NOTE: These are not universally safe to use!
-        instanceEntity = _gameRegistry.generateGUIDDeprecated();
+        // Generate a unique instance entity
+        instanceEntity = GUIDLibrary.guid(_gameRegistry, uint80(ID));
 
         SceneObjectGameItemComponent(
             _gameRegistry.getComponent(SCENE_OBJECT_GAME_ITEM_COMPONENT_ID)

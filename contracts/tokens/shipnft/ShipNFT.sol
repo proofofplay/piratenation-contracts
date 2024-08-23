@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT LICENSE
 
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
 
 import {GameNFTV2Upgradeable, ITraitsProvider} from "../gamenft/GameNFTV2Upgradeable.sol";
 import {GENERATION_TRAIT_ID, LEVEL_TRAIT_ID, NAME_TRAIT_ID, IS_SHIP_TRAIT_ID, MINTER_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
+import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "../../generated/components/ChainIdComponent.sol";
+import {EntityLibrary} from "../../core/EntityLibrary.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.shipnft"));
 
@@ -15,6 +17,8 @@ contract ShipNFT is GameNFTV2Upgradeable {
 
     // 0 max supply = infinite
     uint256 constant MAX_SUPPLY = 0;
+
+    error InvalidInput();
 
     /** SETUP */
     constructor() {
@@ -79,5 +83,38 @@ contract ShipNFT is GameNFTV2Upgradeable {
         uint256 id
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) whenNotPaused {
         _burn(id);
+    }
+
+    /**
+     * Burn multiple tokens in batches
+     *
+     * @param ids        Ids of the tokens to burn
+     */
+    function burnBatch(
+        uint256[] memory ids
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) whenNotPaused {
+        if (ids.length == 0) {
+            revert InvalidInput();
+        }
+        for (uint256 i = 0; i < ids.length; i++) {
+            _burn(ids[i]);
+        }
+    }
+    
+    function _afterTokenTransfer(
+        address,
+        address to,
+        uint256 tokenId,
+        uint256
+    ) internal virtual override {
+        if (
+            to != address(0) &&
+            ChainIdComponent(_gameRegistry.getComponent(CHAIN_ID_COMPONENT_ID))
+                .getValue(EntityLibrary.addressToEntity(to)) !=
+            block.chainid
+        ) {
+            // User is on another chain, burn items as they will be minted there by Multichain System
+            _burn(tokenId);
+        }
     }
 }

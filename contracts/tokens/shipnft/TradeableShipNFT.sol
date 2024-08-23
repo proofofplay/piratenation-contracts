@@ -250,11 +250,16 @@ contract TradeableShipNFT is
 
         // If receiver doesnt have a TL, we emit a burn, skip soulbound ships
         if (to != address(0) && !_hasTradeLicense(to)) {
+            bool isDestinationOnChain = _getChainId(to) == block.chainid;
             for (uint256 i = 0; i < batchSize; i++) {
                 if (
                     _checkIfSoulbound(mixinComponent, firstTokenId + i) == false
                 ) {
-                    _emitTransferEvent(from, address(0), firstTokenId + i);
+                    if (isDestinationOnChain) {
+                        _emitTransferEvent(from, address(0), firstTokenId + i);
+                    } else {
+                        _emitTransferEvent(from, to, firstTokenId + i);
+                    }
                 }
             }
             return;
@@ -463,7 +468,6 @@ contract TradeableShipNFT is
         uint256 tokenId
     ) internal virtual {
         uint256 toChainId = _getChainId(to);
-
         if (to != address(0) && toChainId != block.chainid) {
             emit Transfer(from, address(0), tokenId); //burn the token on our chain
             _gameRegistry.sendMultichain721Transfer(

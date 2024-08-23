@@ -14,6 +14,7 @@ import {MintCounterComponent, ID as MINT_COUNTER_COMPONENT_ID} from "../generate
 import {IERC165, GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {TokenIdLibrary} from "../core/TokenIdLibrary.sol";
+import {BatchComponentData} from "../GameRegistry.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.shipsystem.v2"));
 
@@ -137,6 +138,28 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         }
 
         mintCounterComponent.setValue(ID, currentShipId);
+    }
+
+    function batchMigrationMint(
+        address[] calldata accounts,
+        uint256[] calldata tokenIds,
+        BatchComponentData[] calldata data
+    ) external onlyRole(MANAGER_ROLE) whenNotPaused {
+        if (
+            accounts.length != tokenIds.length || accounts.length != data.length
+        ) {
+            revert InvalidParams();
+        }
+
+        IShipNFT shipNFT = IShipNFT(_getSystem(SHIP_NFT_ID));
+        for (uint256 i = 0; i < accounts.length; i++) {
+            shipNFT.mint(accounts[i], tokenIds[i]);
+            _gameRegistry.batchSetComponentValue(
+                data[i].entities,
+                data[i].componentIds,
+                data[i].data
+            );
+        }
     }
 
     /** INTERNAL **/
