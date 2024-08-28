@@ -24,6 +24,7 @@ import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/B
 import {Banned} from "../../ban/BanSystem.sol";
 import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "../../generated/components/ChainIdComponent.sol";
 import {IMultichain1155} from "../IMultichain1155.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../../generated/components/Uint256Component.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.tradeablegameitems")
@@ -51,7 +52,7 @@ contract TradeableGameItems is
 
     mapping(address => mapping(address => bool)) private _operatorApprovals;
 
-    uint256 public maxTokenId;
+    uint256 public maxTokenId; // deprecated, replaced by UINT256_COMPONENT
 
     error ERC1155InvalidOperator(address operator);
     error ERC1155MissingApprovalForAll(address operator, address owner);
@@ -88,12 +89,6 @@ contract TradeableGameItems is
             interfaceId == type(IERC1155MetadataURI).interfaceId ||
             interfaceId == type(IERC2981).interfaceId ||
             super.supportsInterface(interfaceId);
-    }
-
-    function setMaxTokenId(
-        uint256 _maxTokenId
-    ) external onlyRole(MANAGER_ROLE) {
-        maxTokenId = _maxTokenId;
     }
 
     /** Royalty */
@@ -184,13 +179,16 @@ contract TradeableGameItems is
     ) public onlyRole(GAME_LOGIC_CONTRACT_ROLE) reentrantCheck {
         //reverts if no trade license
         _checkTradeLicense(account);
-        if (maxTokenId == 0) {
+        uint256 maxTokenIdValue = Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        ).getValue(ID);
+        if (maxTokenIdValue == 0) {
             revert InvalidMaxTokenId();
         }
 
         GameItems gameItems = GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID));
-        uint256[] memory ids = new uint256[](maxTokenId);
-        uint256[] memory totalAmounts = new uint256[](maxTokenId);
+        uint256[] memory ids = new uint256[](maxTokenIdValue);
+        uint256[] memory totalAmounts = new uint256[](maxTokenIdValue);
 
         TradeLicenseExemptComponent tleComponent = TradeLicenseExemptComponent(
             _gameRegistry.getComponent(TRADE_LICENSE_EXEMPT_COMPONENT_ID)
@@ -198,7 +196,7 @@ contract TradeableGameItems is
 
         uint256 nextIndex;
         uint256 bal;
-        for (uint256 i = 1; i <= maxTokenId; i++) {
+        for (uint256 i = 1; i <= maxTokenIdValue; i++) {
             bool isExempt = tleComponent.getValue(
                 EntityLibrary.tokenToEntity(
                     _gameRegistry.getSystem(GAME_ITEMS_ID),
@@ -217,7 +215,7 @@ contract TradeableGameItems is
                 nextIndex++;
             }
         }
-        uint256 reduceArrayLengthBy = maxTokenId - nextIndex;
+        uint256 reduceArrayLengthBy = maxTokenIdValue - nextIndex;
         // resize ids array
         assembly {
             mstore(ids, sub(mload(ids), reduceArrayLengthBy))

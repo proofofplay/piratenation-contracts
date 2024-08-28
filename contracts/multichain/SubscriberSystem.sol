@@ -13,6 +13,9 @@ uint256 constant ID = uint256(
     keccak256("game.piratenation.subscribersystem.v1")
 );
 
+/// @notice Error thrown when inputs are invalid
+error InvalidInputs(uint256 entity, uint256 componentId);
+
 /// @notice Error thrown when new registrations are disabled
 error RequestAlreadyCompleted(uint256 requestId);
 
@@ -34,6 +37,12 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
 
     /**
      * Delivers a ComponentValueSet request
+     *
+     * @param requestId     Id of a request, that should only be delivered once
+     * @param componentId   Id of the component to write to
+     * @param entity        Entity pertaining to a component to write to
+     * @param requestTime   Request time must be greater than the last request time
+     * @param data          Data to deliver
      */
     function deliverComponentValueSet(
         uint256 requestId,
@@ -42,6 +51,10 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
         uint256 requestTime,
         bytes calldata data
     ) external whenNotPaused nonReentrant onlyRole(PUB_SUB_ORACLE_ROLE) {
+        if (entity == 0 || componentId == 0) {
+            revert InvalidInputs(entity, componentId);
+        }
+
         // Check if request was already delivered before
         if (_isDelivered(requestId)) {
             revert RequestAlreadyCompleted(requestId);
@@ -49,11 +62,11 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
 
         // Check if request has been executed out of order
         if (
-            _isStaleRequest(
+            _validateIsStale(
                 _getLatestRequestKey(entity, componentId),
                 requestId,
                 requestTime
-            ) == true
+            )
         ) {
             revert RequestIsStale(requestId);
         }
@@ -75,6 +88,12 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
 
     /**
      * Delivers a BatchComponentValueSet request
+     *
+     * @param requestId     Id of a request, that should only be delivered once
+     * @param componentId   Id of the component to write to
+     * @param entities      Array of entities to write to
+     * @param requestTime   Request time must be greater than the last request time
+     * @param data          Data to deliver
      */
     function deliverBatchComponentValueSet(
         uint256 requestId,
@@ -83,6 +102,10 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
         uint256 requestTime,
         bytes[] calldata data
     ) external whenNotPaused nonReentrant onlyRole(PUB_SUB_ORACLE_ROLE) {
+        if (componentId == 0) {
+            revert InvalidInputs(0, componentId);
+        }
+
         // Check if request was already delivered before
         if (_isDelivered(requestId)) {
             revert RequestAlreadyCompleted(requestId);
@@ -94,11 +117,12 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
         uint256 counter = 0;
         for (uint256 i = 0; i < entities.length; i++) {
             if (
-                _isStaleRequest(
+                entities[i] == 0 ||
+                _validateIsStale(
                     _getLatestRequestKey(entities[i], componentId),
                     requestId,
                     requestTime
-                ) == true
+                )
             ) {
                 continue;
             }
@@ -134,7 +158,14 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
-     * Delivers a BatchSetComponentValue request (Not to be confused with BatchComponentValueSet)
+     * Delivers a BatchSetComponentValue request
+     * @dev Not to be confused with BatchComponentValueSet
+     *
+     * @param requestId     Id of a request, that should only be delivered once
+     * @param componentIds  Array of component ids to write to
+     * @param entities      Array of entities to write to
+     * @param requestTime   Request time must be greater than the last request time
+     * @param datas         Array of data to deliver
      */
     function deliverBatchSetComponentValue(
         uint256 requestId,
@@ -160,12 +191,48 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
-     * Checks if a request has been delivered
+     * Checks if a request has already been delivered
      *
      * @param requestId Request entity to check
      */
     function isDelivered(uint256 requestId) external view returns (bool) {
         return _isDelivered(requestId);
+    }
+
+    /**
+     * Checks if a request is stale or has already been delivered
+     *
+     * @param requestId     Request entity to check
+     * @param componentId   Component id to check
+     * @param entity        Entity to check
+     * @param requestTime   Request time must be greater than the last request time
+     * @return              True if the request is stale or has already been delivered
+     */
+    function isDeliveredOrStale(
+        uint256 requestId,
+        uint256 componentId,
+        uint256 entity,
+        uint256 requestTime
+    ) external view returns (bool) {
+        if (_isDelivered(requestId)) {
+            return true;
+        }
+
+        RequestIdComponent requestIdComponent = RequestIdComponent(
+            _gameRegistry.getComponent(REQUEST_ID_COMPONENT_ID)
+        );
+        if (
+            _isStale(
+                _getLatestRequestKey(entity, componentId),
+                requestTime,
+                requestIdComponent
+            )
+        ) {
+            return true;
+        }
+
+        // This is a valid request payload
+        return false;
     }
 
     /** INTERNAL **/
@@ -192,21 +259,13 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
-     * Returns true for stale requests; otherwise track this request as latest for entity + component
+     * Checks if a request is stale
      */
-    function _isStaleRequest(
+    function _isStale(
         uint256 latestRequestKey,
-        uint256 requestId,
-        uint256 requestTime
-    ) internal returns (bool) {
-        if (latestRequestKey == 0) {
-            return false;
-        }
-
-        RequestIdComponent requestIdComponent = RequestIdComponent(
-            _gameRegistry.getComponent(REQUEST_ID_COMPONENT_ID)
-        );
-
+        uint256 requestTime,
+        RequestIdComponent requestIdComponent
+    ) internal view returns (bool) {
         // Compare the createdTime for latest request with the current requestTime
         uint256 latestRequestId = requestIdComponent.getValue(latestRequestKey);
         uint256 latestRequestTime = RequestStatusComponent(
@@ -216,9 +275,32 @@ contract SubscriberSystem is GameRegistryConsumerUpgradeable {
         if (latestRequestTime > requestTime) {
             return true;
         }
-
-        // Track the latest request for the entity
-        requestIdComponent.setValue(latestRequestKey, requestId);
         return false;
+    }
+
+    /**
+     * Returns true for stale requests; otherwise track request by component + entity
+     */
+    function _validateIsStale(
+        uint256 latestRequestKey,
+        uint256 requestId,
+        uint256 requestTime
+    ) internal returns (bool) {
+        RequestIdComponent requestIdComponent = RequestIdComponent(
+            _gameRegistry.getComponent(REQUEST_ID_COMPONENT_ID)
+        );
+
+        // Compare the createdTime for latest request with the current requestTime
+        bool isStale = _isStale(
+            latestRequestKey,
+            requestTime,
+            requestIdComponent
+        );
+
+        if (!isStale) {
+            // Track the latest request for the entity
+            requestIdComponent.setValue(latestRequestKey, requestId);
+        }
+        return isStale;
     }
 }

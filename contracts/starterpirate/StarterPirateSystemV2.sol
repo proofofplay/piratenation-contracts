@@ -12,7 +12,7 @@ import {IERC165, GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerU
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {TokenIdLibrary} from "../core/TokenIdLibrary.sol";
 
-import {LootTableComponent, Layout as LootTableComponentStruct, ID as LOOT_TABLE_COMPONENT_ID} from "../generated/components/LootTableComponent.sol";
+import {StaticEntityListComponent, ID as STATIC_ENTITY_LIST_COMPONENT_ID} from "../generated/components/StaticEntityListComponent.sol";
 import {MintedStarterPirateComponent, Layout as MintedStarterPirateComponentStruct, ID as MINTED_STARTER_PIRATE_COMPONENT_ID} from "../generated/components/MintedStarterPirateComponent.sol";
 import {NameComponent, ID as NAME_COMPONENT_ID, Layout as NameComponentLayout} from "../generated/components/NameComponent.sol";
 import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
@@ -27,9 +27,6 @@ import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComp
 import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 import {StringArrayComponent, ID as STRING_ARRAY_COMPONENT_ID} from "../generated/components/StringArrayComponent.sol";
 import {BatchComponentData} from "../GameRegistry.sol";
-
-// TODO: Remove once we finish component migration
-import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "../interfaces/ITraitsProvider.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.starterpiratesystem.v2")
@@ -316,23 +313,6 @@ contract StarterPirateSystemV2 is
         // Set static traits
         _setStaticTraits(entity);
 
-        //TODO: Remove this once we've fully migrated to components
-        ITraitsProvider traitsProvider = _traitsProvider();
-        // XP trait
-        traitsProvider.setTraitUint256(
-            address(starterPirateNFT),
-            tokenId,
-            XP_TRAIT_ID,
-            0
-        );
-        // Level trait
-        traitsProvider.setTraitUint256(
-            address(starterPirateNFT),
-            tokenId,
-            LEVEL_TRAIT_ID,
-            1
-        );
-
         return randomWord;
     }
 
@@ -406,12 +386,12 @@ contract StarterPirateSystemV2 is
     }
 
     function _checkValidMixin(uint256 mixinEntity) internal view {
-        LootTableComponentStruct memory lootTable = LootTableComponent(
-            _gameRegistry.getComponent(LOOT_TABLE_COMPONENT_ID)
-        ).getLayoutValue(ID);
+        uint256[] memory validMixinList = StaticEntityListComponent(
+            _gameRegistry.getComponent(STATIC_ENTITY_LIST_COMPONENT_ID)
+        ).getValue(ID);
         bool validMixin = false;
-        for (uint256 i = 0; i < lootTable.lootEntities.length; i++) {
-            if (lootTable.lootEntities[i] == mixinEntity) {
+        for (uint256 i = 0; i < validMixinList.length; i++) {
+            if (validMixinList[i] == mixinEntity) {
                 validMixin = true;
                 break;
             }

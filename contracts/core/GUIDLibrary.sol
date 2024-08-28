@@ -15,6 +15,9 @@ error CounterOverflow(uint256 counter);
 /// @notice Error thrown when the chain ID is too large to fit in 32 bits
 error ChainIdOverflow(uint256 chainId);
 
+/// @notice Error thrown when the prefix is too large to fit in 80 bits
+error PrefixOverflow(uint256 prefix);
+
 /**
  * Common helper functions for dealing with GUIDS
  */
@@ -50,7 +53,6 @@ library GUIDLibrary {
             );
     }
 
-
     /**
      * Increments the counter for a given prefix and returns a new multi-chain safe GUID
      * @param gameRegistry Address of the GuidCounter component
@@ -82,6 +84,9 @@ library GUIDLibrary {
         if (block.chainid > type(uint32).max) {
             revert ChainIdOverflow(block.chainid);
         }
+        if (prefix > type(uint80).max) {
+            revert PrefixOverflow(prefix);
+        }
         if (counter > type(uint144).max) {
             revert CounterOverflow(counter);
         }
@@ -90,6 +95,9 @@ library GUIDLibrary {
         // - Chain ID in the highest 32 bits
         // - Prefix in the next 80 bits (10 characters)
         // - Counter in the lowest 144 bits
-        return (block.chainid << 224) | (prefix << 144) | counter;
+        return
+            (uint256(block.chainid) << 224) |
+            (uint256(prefix) << 144) |
+            counter;
     }
 }

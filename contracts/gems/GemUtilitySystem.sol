@@ -16,7 +16,7 @@ import {DefaultTransformRunnerConfigComponent, Layout as DefaultTransformRunnerC
 import {BountyTransformConfigComponent, Layout as BountyTransformConfigComponentLayout, ID as BOUNTY_TRANSFORM_CONFIG_COMPONENT_ID} from "../generated/components/BountyTransformConfigComponent.sol";
 import {TransformAccountDataComponent, Layout as TransformAccountDataComponentLayout, ID as TRANSFORM_ACCOUNT_DATA_COMPONENT_ID} from "../generated/components/TransformAccountDataComponent.sol";
 import {PirateTransformRunnerConfigComponent, Layout as PirateTransformRunnerConfigComponentLayout, ID as PIRATE_QUEST_RUNNER_CONFIG_COMPONENT_ID} from "../generated/components/PirateTransformRunnerConfigComponent.sol";
-import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_LIST_COMPONENT_ID} from "../generated/components/EntityListComponent.sol";
+import {StaticEntityListComponent, ID as STATIC_ENTITY_LIST_COMPONENT_ID} from "../generated/components/StaticEntityListComponent.sol";
 import {ParentComponent, ID as PARENT_COMPONENT_ID} from "../generated/components/ParentComponent.sol";
 import {RangeComponent, Layout as RangeComponentLayout, ID as RANGE_COMPONENT_ID} from "../generated/components/RangeComponent.sol";
 import {GemFormulaComponent, Layout as GemFormulaComponentLayout, ID as GEM_FORMULA_COMPONENT_ID} from "../generated/components/GemFormulaComponent.sol";
@@ -481,19 +481,16 @@ contract GemUtilitySystem is
         uint256 multiplier
     ) internal view returns (uint256 gemCost) {
         // Use a single set of piecewise formulas assigned to this contract
-        EntityListComponentLayout
-            memory entityListComponentLayout = EntityListComponent(
-                _gameRegistry.getComponent(ENTITY_LIST_COMPONENT_ID)
-            ).getLayoutValue(ID);
+        uint256[] memory entityList = StaticEntityListComponent(
+            _gameRegistry.getComponent(STATIC_ENTITY_LIST_COMPONENT_ID)
+        ).getValue(ID);
 
         RangeComponent rangeComponent = RangeComponent(
             _gameRegistry.getComponent(RANGE_COMPONENT_ID)
         );
         RangeComponentLayout memory range;
-        for (uint256 i = 0; i < entityListComponentLayout.value.length; i++) {
-            range = rangeComponent.getLayoutValue(
-                entityListComponentLayout.value[i]
-            );
+        for (uint256 i = 0; i < entityList.length; i++) {
+            range = rangeComponent.getLayoutValue(entityList[i]);
             if (
                 amountOfSeconds > range.lowerBound &&
                 amountOfSeconds <= range.upperBound
@@ -502,7 +499,7 @@ contract GemUtilitySystem is
                     amountOfSeconds,
                     GemFormulaComponent(
                         _gameRegistry.getComponent(GEM_FORMULA_COMPONENT_ID)
-                    ).getLayoutValue(entityListComponentLayout.value[i])
+                    ).getLayoutValue(entityList[i])
                 );
                 break;
             }

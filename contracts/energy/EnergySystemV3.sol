@@ -17,7 +17,7 @@ import {EntityLibrary} from "../core/EntityLibrary.sol";
 import "../GameRegistryConsumerUpgradeable.sol";
 import {EnergyComponent, Layout as EnergyComponentLayout, ID as ENERGY_COMPONENT_ID} from "../generated/components/EnergyComponent.sol";
 import {Uint256Component, ID as Uint256ComponentId} from "../generated/components/Uint256Component.sol";
-import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_LIST_COMPONENT_ID} from "../generated/components/EntityListComponent.sol";
+import {StaticEntityListComponent, ID as STATIC_ENTITY_LIST_COMPONENT_ID} from "../generated/components/StaticEntityListComponent.sol";
 import {EnergyPackCountComponent, ID as ENERGY_PACK_COUNT_COMPONENT_ID} from "../generated/components/EnergyPackCountComponent.sol";
 import {EnergyPackComponent, Layout as EnergyPackComponentLayout, ID as ENERGY_PACK_COMPONENT_ID} from "../generated/components/EnergyPackComponent.sol";
 import {EnergyProvidedComponent, Layout as EnergyProvidedComponentLayout, ID as ENERGY_PROVIDED_COMPONENT_ID} from "../generated/components/EnergyProvidedComponent.sol";
@@ -240,11 +240,10 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
     function purchaseEnergy() external whenNotPaused nonReentrant {
         address caller = _getPlayerAccount(_msgSender());
         // Energy packs
-        EntityListComponentLayout
-            memory entityListComponentLayout = EntityListComponent(
-                _gameRegistry.getComponent(ENTITY_LIST_COMPONENT_ID)
-            ).getLayoutValue(ID);
-        if (entityListComponentLayout.value.length == 0) {
+        uint256[] memory entityList = StaticEntityListComponent(
+            _gameRegistry.getComponent(STATIC_ENTITY_LIST_COMPONENT_ID)
+        ).getValue(ID);
+        if (entityList.length == 0) {
             revert NotAvailable();
         }
         // Form the entity for the player wallet and current day
@@ -259,11 +258,11 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
         uint256 dailyCount = energyPackCountComponent.getValue(
             currentDayWalletEntity
         );
-        if (dailyCount >= entityListComponentLayout.value.length) {
+        if (dailyCount >= entityList.length) {
             revert NotAvailable();
         }
         // Get the energy pack entity
-        uint256 energyPackEntity = entityListComponentLayout.value[dailyCount];
+        uint256 energyPackEntity = entityList[dailyCount];
         EnergyPackComponentLayout memory energyPackData = EnergyPackComponent(
             _gameRegistry.getComponent(ENERGY_PACK_COMPONENT_ID)
         ).getLayoutValue(energyPackEntity);
