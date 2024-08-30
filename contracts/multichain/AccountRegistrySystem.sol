@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.13;
 
-import {MINTER_ROLE} from "../Constants.sol";
+import {PUB_SUB_ORACLE_ROLE} from "./RequestLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {AccountLimitComponent, Layout as AccountLimitComponentLayout, ID as ACCOUNT_LIMIT_COMPONENT_ID} from "../generated/components/AccountLimitComponent.sol";
@@ -43,7 +43,7 @@ contract AccountRegistrySystem is GameRegistryConsumerUpgradeable {
      */
     function registerWallet(
         address wallet
-    ) external whenNotPaused nonReentrant onlyRole(MINTER_ROLE) {
+    ) external whenNotPaused nonReentrant onlyRole(PUB_SUB_ORACLE_ROLE) {
         CounterComponent counter = CounterComponent(
             _gameRegistry.getComponent(COUNTER_COMPONENT_ID)
         );
@@ -79,7 +79,7 @@ contract AccountRegistrySystem is GameRegistryConsumerUpgradeable {
     function batchRegisterWallets(
         address[] calldata wallets,
         bool isPublishing
-    ) external whenNotPaused nonReentrant onlyRole(MINTER_ROLE) {
+    ) external whenNotPaused nonReentrant onlyRole(PUB_SUB_ORACLE_ROLE) {
         CounterComponent counter = CounterComponent(
             _gameRegistry.getComponent(COUNTER_COMPONENT_ID)
         );
