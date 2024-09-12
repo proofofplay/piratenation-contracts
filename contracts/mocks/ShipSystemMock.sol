@@ -2,15 +2,15 @@
 
 pragma solidity ^0.8.9;
 
-import "../ship/ShipSystem.sol";
+import "../ship/ShipSystemV2.sol";
 
 /** @title ShipSystem Mock for testing */
-contract ShipSystemMock is ShipSystem {
+contract ShipSystemMock is ShipSystemV2 {
     function grantLootForTests(
         address account,
         uint256 lootId,
         uint256 amount
     ) external {
-        _grantLoot(account, lootId, amount);
+        _mintAndInitializeLoot(account, lootId, amount);
     }
 }

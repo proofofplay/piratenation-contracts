@@ -39,6 +39,12 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         __GameRegistryConsumer_init(gameRegistryAddress, ID);
     }
 
+    function currentShipId() external view returns (uint256) {
+            return MintCounterComponent(
+                _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
+            ).getValue(ID);
+    }
+
     /**
      * Updates the current ship id count
      * @param newCount      New count to set

@@ -81,7 +81,7 @@ contract AchievementNFTTokenURIHandler is
             value: MixinLibrary.getBytesValue(
                 entity,
                 mixins,
-                IComponent(_gameRegistry.getComponent(DESCRIPTION_COMPONENT_ID))
+                IComponent(_gameRegistry.getComponent(NAME_COMPONENT_ID))
             ),
             dataType: TraitDataType.STRING,
             isTopLevelProperty: true,
@@ -94,7 +94,7 @@ contract AchievementNFTTokenURIHandler is
             value: MixinLibrary.getBytesValue(
                 entity,
                 mixins,
-                IComponent(_gameRegistry.getComponent(DESCRIPTION_COMPONENT_ID))
+                IComponent(_gameRegistry.getComponent(IMAGE_URL_COMPONENT_ID))
             ),
             dataType: TraitDataType.STRING,
             isTopLevelProperty: true,

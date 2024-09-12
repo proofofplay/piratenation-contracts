@@ -7,6 +7,7 @@ import "../tokens/shipnft/ShipNFT.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {ITraitsConsumer} from "../interfaces/ITraitsConsumer.sol";
 import {IGameNFTV2Upgradeable} from "../tokens/gamenft/IGameNFTV2Upgradeable.sol";
+import {MintCounterComponent, ID as MINT_COUNTER_COMPONENT_ID} from "../generated/components/MintCounterComponent.sol";
 
 /** @title Ship NFT Mock for testing */
 contract ShipNFTMock is ShipNFT {
@@ -32,5 +33,11 @@ contract ShipNFTMock is ShipNFT {
 
     function getEntity(uint256 tokenId) external view returns (uint256) {
         return EntityLibrary.tokenToEntity(address(this), tokenId);
+    }
+
+    function currentShipId() external view returns (uint256) {
+        return MintCounterComponent(
+            _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
+        ).getValue(ID);
     }
 }

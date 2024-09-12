@@ -8,18 +8,15 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.teststackdepthcomponent")
+    keccak256("game.piratenation.rerollpendingcomponent.v1")
 );
 
 struct Layout {
-    string stringValueA;
-    string stringValueB;
-    string stringValueC;
-    string stringValueD;
-    string stringValueE;
+    bool expertisePending;
+    bool affinityPending;
 }
 
-library TestStackDepthComponentStorage {
+library RerollPendingComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -41,10 +38,10 @@ library TestStackDepthComponentStorage {
 }
 
 /**
- * @title TestStackDepthComponent
- * @dev Test Component for Stack Depth
+ * @title RerollPendingComponent
+ * @dev Track if a reroll is pending for an entity
  */
-contract TestStackDepthComponent is BaseStorageComponentV2 {
+contract RerollPendingComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -63,28 +60,16 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
         override
         returns (string[] memory keys, TypesLibrary.SchemaValue[] memory values)
     {
-        keys = new string[](5);
-        values = new TypesLibrary.SchemaValue[](5);
+        keys = new string[](2);
+        values = new TypesLibrary.SchemaValue[](2);
 
-        // A string value
-        keys[0] = "string_value_a";
-        values[0] = TypesLibrary.SchemaValue.STRING;
+        // Whether an expertise reroll is pending for an entity
+        keys[0] = "expertise_pending";
+        values[0] = TypesLibrary.SchemaValue.BOOL;
 
-        // A string value
-        keys[1] = "string_value_b";
-        values[1] = TypesLibrary.SchemaValue.STRING;
-
-        // A string value
-        keys[2] = "string_value_c";
-        values[2] = TypesLibrary.SchemaValue.STRING;
-
-        // A string value
-        keys[3] = "string_value_d";
-        values[3] = TypesLibrary.SchemaValue.STRING;
-
-        // A string value
-        keys[4] = "string_value_e";
-        values[4] = TypesLibrary.SchemaValue.STRING;
+        // Whether an affinity reroll is pending for an entity
+        keys[1] = "affinity_pending";
+        values[1] = TypesLibrary.SchemaValue.BOOL;
     }
 
     /**
@@ -104,30 +89,15 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param stringValueA A string value
-     * @param stringValueB A string value
-     * @param stringValueC A string value
-     * @param stringValueD A string value
-     * @param stringValueE A string value
+     * @param expertisePending Whether an expertise reroll is pending for an entity
+     * @param affinityPending Whether an affinity reroll is pending for an entity
      */
     function setValue(
         uint256 entity,
-        string calldata stringValueA,
-        string calldata stringValueB,
-        string calldata stringValueC,
-        string calldata stringValueD,
-        string calldata stringValueE
+        bool expertisePending,
+        bool affinityPending
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        _setValue(
-            entity,
-            Layout(
-                stringValueA,
-                stringValueB,
-                stringValueC,
-                stringValueD,
-                stringValueE
-            )
-        );
+        _setValue(entity, Layout(expertisePending, affinityPending));
     }
 
     /**
@@ -165,20 +135,15 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = TestStackDepthComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        value = RerollPendingComponentStorage.layout().entityIdToStruct[entity];
     }
 
     /**
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return stringValueA A string value
-     * @return stringValueB A string value
-     * @return stringValueC A string value
-     * @return stringValueD A string value
-     * @return stringValueE A string value
+     * @return expertisePending Whether an expertise reroll is pending for an entity
+     * @return affinityPending Whether an affinity reroll is pending for an entity
      */
     function getValue(
         uint256 entity
@@ -186,27 +151,15 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
         external
         view
         virtual
-        returns (
-            string memory stringValueA,
-            string memory stringValueB,
-            string memory stringValueC,
-            string memory stringValueD,
-            string memory stringValueE
-        )
+        returns (bool expertisePending, bool affinityPending)
     {
         if (has(entity)) {
-            Layout memory s = TestStackDepthComponentStorage
+            Layout memory s = RerollPendingComponentStorage
                 .layout()
                 .entityIdToStruct[entity];
-            (
-                stringValueA,
-                stringValueB,
-                stringValueC,
-                stringValueD,
-                stringValueE
-            ) = abi.decode(
+            (expertisePending, affinityPending) = abi.decode(
                 _getEncodedValues(s),
-                (string, string, string, string, string)
+                (bool, bool)
             );
         }
     }
@@ -220,17 +173,14 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = TestStackDepthComponentStorage
+        Layout storage s = RerollPendingComponentStorage
             .layout()
             .entityIdToStruct[entity];
 
         // ABI Encode all fields of the struct and add to values array
-        values = new bytes[](5);
-        values[0] = abi.encode(s.stringValueA);
-        values[1] = abi.encode(s.stringValueB);
-        values[2] = abi.encode(s.stringValueC);
-        values[3] = abi.encode(s.stringValueD);
-        values[4] = abi.encode(s.stringValueE);
+        values = new bytes[](2);
+        values[0] = abi.encode(s.expertisePending);
+        values[1] = abi.encode(s.affinityPending);
     }
 
     /**
@@ -241,7 +191,7 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = TestStackDepthComponentStorage
+        Layout memory s = RerollPendingComponentStorage
             .layout()
             .entityIdToStruct[entity];
         value = _getEncodedValues(s);
@@ -256,16 +206,13 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = TestStackDepthComponentStorage
+        Layout memory s = RerollPendingComponentStorage
             .layout()
             .entityIdToStruct[entity];
-        (
-            s.stringValueA,
-            s.stringValueB,
-            s.stringValueC,
-            s.stringValueD,
-            s.stringValueE
-        ) = abi.decode(value, (string, string, string, string, string));
+        (s.expertisePending, s.affinityPending) = abi.decode(
+            value,
+            (bool, bool)
+        );
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -286,16 +233,13 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = TestStackDepthComponentStorage
+            Layout memory s = RerollPendingComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
-            (
-                s.stringValueA,
-                s.stringValueB,
-                s.stringValueC,
-                s.stringValueD,
-                s.stringValueE
-            ) = abi.decode(values[i], (string, string, string, string, string));
+            (s.expertisePending, s.affinityPending) = abi.decode(
+                values[i],
+                (bool, bool)
+            );
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -311,7 +255,7 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete TestStackDepthComponentStorage.layout().entityIdToStruct[entity];
+        delete RerollPendingComponentStorage.layout().entityIdToStruct[entity];
         _emitRemoveBytes(entity);
     }
 
@@ -325,7 +269,7 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete TestStackDepthComponentStorage.layout().entityIdToStruct[
+            delete RerollPendingComponentStorage.layout().entityIdToStruct[
                 entities[i]
             ];
         }
@@ -344,15 +288,12 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = TestStackDepthComponentStorage
+        Layout storage s = RerollPendingComponentStorage
             .layout()
             .entityIdToStruct[entity];
 
-        s.stringValueA = value.stringValueA;
-        s.stringValueB = value.stringValueB;
-        s.stringValueC = value.stringValueC;
-        s.stringValueD = value.stringValueD;
-        s.stringValueE = value.stringValueE;
+        s.expertisePending = value.expertisePending;
+        s.affinityPending = value.affinityPending;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
@@ -361,26 +302,13 @@ contract TestStackDepthComponent is BaseStorageComponentV2 {
         // ABI Encode all native types of the struct
         _emitSetBytes(
             entity,
-            abi.encode(
-                value.stringValueA,
-                value.stringValueB,
-                value.stringValueC,
-                value.stringValueD,
-                value.stringValueE
-            )
+            abi.encode(value.expertisePending, value.affinityPending)
         );
     }
 
     function _getEncodedValues(
         Layout memory value
     ) internal pure returns (bytes memory) {
-        return
-            abi.encode(
-                value.stringValueA,
-                value.stringValueB,
-                value.stringValueC,
-                value.stringValueD,
-                value.stringValueE
-            );
+        return abi.encode(value.expertisePending, value.affinityPending);
     }
 }

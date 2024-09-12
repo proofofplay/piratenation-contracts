@@ -8,18 +8,16 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.testscalarcomponent")
+    keccak256("game.piratenation.rerollconfigcomponent.v1")
 );
 
 struct Layout {
-    bool boolValue;
-    int64 int64Value;
-    uint256 uint256Value;
-    address addressValue;
-    string stringValue;
+    uint64 baseGemCost;
+    uint64 addedGemCostPerLevel;
+    uint64 levelToScale;
 }
 
-library TestScalarComponentStorage {
+library RerollConfigComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -41,10 +39,10 @@ library TestScalarComponentStorage {
 }
 
 /**
- * @title TestScalarComponent
- * @dev Test Component for Scalar Values
+ * @title RerollConfigComponent
+ * @dev The config for Reroll System
  */
-contract TestScalarComponent is BaseStorageComponentV2 {
+contract RerollConfigComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -63,28 +61,20 @@ contract TestScalarComponent is BaseStorageComponentV2 {
         override
         returns (string[] memory keys, TypesLibrary.SchemaValue[] memory values)
     {
-        keys = new string[](5);
-        values = new TypesLibrary.SchemaValue[](5);
+        keys = new string[](3);
+        values = new TypesLibrary.SchemaValue[](3);
 
-        // A boolean value
-        keys[0] = "bool_value";
-        values[0] = TypesLibrary.SchemaValue.BOOL;
+        // The base gem cost to reroll a trait
+        keys[0] = "base_gem_cost";
+        values[0] = TypesLibrary.SchemaValue.UINT64;
 
-        // A int64 value
-        keys[1] = "int64_value";
-        values[1] = TypesLibrary.SchemaValue.INT64;
+        // The added gem cost per level past level_to_scale
+        keys[1] = "added_gem_cost_per_level";
+        values[1] = TypesLibrary.SchemaValue.UINT64;
 
-        // A uint256 value
-        keys[2] = "uint256_value";
-        values[2] = TypesLibrary.SchemaValue.UINT256;
-
-        // An address value
-        keys[3] = "address_value";
-        values[3] = TypesLibrary.SchemaValue.ADDRESS;
-
-        // A string value
-        keys[4] = "string_value";
-        values[4] = TypesLibrary.SchemaValue.STRING;
+        // The level at which the cost scaling starts
+        keys[2] = "level_to_scale";
+        values[2] = TypesLibrary.SchemaValue.UINT64;
     }
 
     /**
@@ -104,29 +94,19 @@ contract TestScalarComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param boolValue A boolean value
-     * @param int64Value A int64 value
-     * @param uint256Value A uint256 value
-     * @param addressValue An address value
-     * @param stringValue A string value
+     * @param baseGemCost The base gem cost to reroll a trait
+     * @param addedGemCostPerLevel The added gem cost per level past level_to_scale
+     * @param levelToScale The level at which the cost scaling starts
      */
     function setValue(
         uint256 entity,
-        bool boolValue,
-        int64 int64Value,
-        uint256 uint256Value,
-        address addressValue,
-        string calldata stringValue
+        uint64 baseGemCost,
+        uint64 addedGemCostPerLevel,
+        uint64 levelToScale
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         _setValue(
             entity,
-            Layout(
-                boolValue,
-                int64Value,
-                uint256Value,
-                addressValue,
-                stringValue
-            )
+            Layout(baseGemCost, addedGemCostPerLevel, levelToScale)
         );
     }
 
@@ -165,18 +145,16 @@ contract TestScalarComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = TestScalarComponentStorage.layout().entityIdToStruct[entity];
+        value = RerollConfigComponentStorage.layout().entityIdToStruct[entity];
     }
 
     /**
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return boolValue A boolean value
-     * @return int64Value A int64 value
-     * @return uint256Value A uint256 value
-     * @return addressValue An address value
-     * @return stringValue A string value
+     * @return baseGemCost The base gem cost to reroll a trait
+     * @return addedGemCostPerLevel The added gem cost per level past level_to_scale
+     * @return levelToScale The level at which the cost scaling starts
      */
     function getValue(
         uint256 entity
@@ -185,26 +163,18 @@ contract TestScalarComponent is BaseStorageComponentV2 {
         view
         virtual
         returns (
-            bool boolValue,
-            int64 int64Value,
-            uint256 uint256Value,
-            address addressValue,
-            string memory stringValue
+            uint64 baseGemCost,
+            uint64 addedGemCostPerLevel,
+            uint64 levelToScale
         )
     {
         if (has(entity)) {
-            Layout memory s = TestScalarComponentStorage
+            Layout memory s = RerollConfigComponentStorage
                 .layout()
                 .entityIdToStruct[entity];
-            (
-                boolValue,
-                int64Value,
-                uint256Value,
-                addressValue,
-                stringValue
-            ) = abi.decode(
+            (baseGemCost, addedGemCostPerLevel, levelToScale) = abi.decode(
                 _getEncodedValues(s),
-                (bool, int64, uint256, address, string)
+                (uint64, uint64, uint64)
             );
         }
     }
@@ -218,17 +188,15 @@ contract TestScalarComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = TestScalarComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        Layout storage s = RerollConfigComponentStorage
+            .layout()
+            .entityIdToStruct[entity];
 
         // ABI Encode all fields of the struct and add to values array
-        values = new bytes[](5);
-        values[0] = abi.encode(s.boolValue);
-        values[1] = abi.encode(s.int64Value);
-        values[2] = abi.encode(s.uint256Value);
-        values[3] = abi.encode(s.addressValue);
-        values[4] = abi.encode(s.stringValue);
+        values = new bytes[](3);
+        values[0] = abi.encode(s.baseGemCost);
+        values[1] = abi.encode(s.addedGemCostPerLevel);
+        values[2] = abi.encode(s.levelToScale);
     }
 
     /**
@@ -239,9 +207,9 @@ contract TestScalarComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = TestScalarComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        Layout memory s = RerollConfigComponentStorage
+            .layout()
+            .entityIdToStruct[entity];
         value = _getEncodedValues(s);
     }
 
@@ -254,16 +222,13 @@ contract TestScalarComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = TestScalarComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
-        (
-            s.boolValue,
-            s.int64Value,
-            s.uint256Value,
-            s.addressValue,
-            s.stringValue
-        ) = abi.decode(value, (bool, int64, uint256, address, string));
+        Layout memory s = RerollConfigComponentStorage
+            .layout()
+            .entityIdToStruct[entity];
+        (s.baseGemCost, s.addedGemCostPerLevel, s.levelToScale) = abi.decode(
+            value,
+            (uint64, uint64, uint64)
+        );
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -284,16 +249,11 @@ contract TestScalarComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = TestScalarComponentStorage
+            Layout memory s = RerollConfigComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
-            (
-                s.boolValue,
-                s.int64Value,
-                s.uint256Value,
-                s.addressValue,
-                s.stringValue
-            ) = abi.decode(values[i], (bool, int64, uint256, address, string));
+            (s.baseGemCost, s.addedGemCostPerLevel, s.levelToScale) = abi
+                .decode(values[i], (uint64, uint64, uint64));
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -309,7 +269,7 @@ contract TestScalarComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete TestScalarComponentStorage.layout().entityIdToStruct[entity];
+        delete RerollConfigComponentStorage.layout().entityIdToStruct[entity];
         _emitRemoveBytes(entity);
     }
 
@@ -323,7 +283,7 @@ contract TestScalarComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete TestScalarComponentStorage.layout().entityIdToStruct[
+            delete RerollConfigComponentStorage.layout().entityIdToStruct[
                 entities[i]
             ];
         }
@@ -342,15 +302,13 @@ contract TestScalarComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = TestScalarComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        Layout storage s = RerollConfigComponentStorage
+            .layout()
+            .entityIdToStruct[entity];
 
-        s.boolValue = value.boolValue;
-        s.int64Value = value.int64Value;
-        s.uint256Value = value.uint256Value;
-        s.addressValue = value.addressValue;
-        s.stringValue = value.stringValue;
+        s.baseGemCost = value.baseGemCost;
+        s.addedGemCostPerLevel = value.addedGemCostPerLevel;
+        s.levelToScale = value.levelToScale;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
@@ -360,11 +318,9 @@ contract TestScalarComponent is BaseStorageComponentV2 {
         _emitSetBytes(
             entity,
             abi.encode(
-                value.boolValue,
-                value.int64Value,
-                value.uint256Value,
-                value.addressValue,
-                value.stringValue
+                value.baseGemCost,
+                value.addedGemCostPerLevel,
+                value.levelToScale
             )
         );
     }
@@ -374,11 +330,9 @@ contract TestScalarComponent is BaseStorageComponentV2 {
     ) internal pure returns (bytes memory) {
         return
             abi.encode(
-                value.boolValue,
-                value.int64Value,
-                value.uint256Value,
-                value.addressValue,
-                value.stringValue
+                value.baseGemCost,
+                value.addedGemCostPerLevel,
+                value.levelToScale
             );
     }
 }

@@ -7,7 +7,7 @@ import {TimeRangeLibrary} from "../core/TimeRangeLibrary.sol";
 import {ILootSystem} from "../loot/ILootSystem.sol";
 
 import {IGachaSystem, ID} from "./IGachaSystem.sol";
-import {StarterPirateSystem, ID as STARTER_PIRATE_SYSTEM_ID} from "../starterpirate/StarterPirateSystem.sol";
+import {StarterPirateSystemV2, ID as STARTER_PIRATE_SYSTEM_ID} from "../starterpirate/StarterPirateSystemV2.sol";
 
 import {GachaComponent, Layout as GachaComponentLayout, ID as GACHA_COMPONENT_ID} from "../generated/components/GachaComponent.sol";
 import {ActiveGachasComponent, Layout as ActiveGachasComponentLayout, ID as ACTIVE_GACHAS_COMPONENT_ID} from "../generated/components/ActiveGachasComponent.sol";
@@ -210,13 +210,14 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
             );
 
             // If loot is StarterPirate then grant separately
-            StarterPirateSystem starterPirateSystem = StarterPirateSystem(
+            StarterPirateSystemV2 starterPirateSystem = StarterPirateSystemV2(
                 _gameRegistry.getSystem(STARTER_PIRATE_SYSTEM_ID)
             );
             if (loot[0].tokenContract == address(starterPirateSystem)) {
                 starterPirateSystem.grantLootWithRandomWord(
                     account,
                     loot[0].lootId,
+                    1,
                     randomWord
                 );
             } else {
