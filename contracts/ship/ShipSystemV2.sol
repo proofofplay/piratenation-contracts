@@ -126,14 +126,14 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         MintCounterComponent mintCounterComponent = MintCounterComponent(
             _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
         );
-        uint256 currentShipId = mintCounterComponent.getValue(ID);
+        uint256 _currentShipId = mintCounterComponent.getValue(ID);
 
         IShipNFT shipNFT = IShipNFT(_getSystem(SHIP_NFT_ID));
         MixinComponent mixinComponent = MixinComponent(
             _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
         );
         for (uint256 i = 0; i < accounts.length; i++) {
-            currentShipId++;
+            _currentShipId++;
             _mintAndSetup(
                 shipNFT,
                 mixinComponent,
@@ -143,7 +143,7 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
             );
         }
 
-        mintCounterComponent.setValue(ID, currentShipId);
+        mintCounterComponent.setValue(ID, _currentShipId);
     }
 
     function batchMigrationMint(
@@ -182,7 +182,7 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         MintCounterComponent mintCounterComponent = MintCounterComponent(
             _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
         );
-        uint256 currentShipId = mintCounterComponent.getValue(ID);
+        uint256 _currentShipId = mintCounterComponent.getValue(ID);
 
         IShipNFT shipNFT = IShipNFT(_getSystem(SHIP_NFT_ID));
         MixinComponent mixinComponent = MixinComponent(
@@ -190,12 +190,12 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         );
         for (uint8 idx = 0; idx < amount; idx++) {
             // Increment current token id to next id
-            currentShipId++;
-            uint96 tokenId = TokenIdLibrary.generateTokenId(currentShipId);
+            _currentShipId++;
+            uint96 tokenId = TokenIdLibrary.generateTokenId(_currentShipId);
             _mintAndSetup(shipNFT, mixinComponent, account, tokenId, lootId);
         }
 
-        mintCounterComponent.setValue(ID, currentShipId);
+        mintCounterComponent.setValue(ID, _currentShipId);
     }
 
     function _mintAndSetup(
