@@ -393,13 +393,17 @@ contract PirateNFTTokenURIHandler is
         // Star Sign
         baseTraits[18] = TokenURITrait({
             name: "Star Sign",
-            value: abi.encode(
-                nameComponent.getValue(
-                    StarSignComponent(
-                        _gameRegistry.getComponent(STAR_SIGN_COMPONENT_ID)
-                    ).getValue(entity)
-                )
-            ),
+            value: StarSignComponent(
+                _gameRegistry.getComponent(STAR_SIGN_COMPONENT_ID)
+            ).getValue(entity) == 0
+                ? abi.encode("None")
+                : abi.encode(
+                    nameComponent.getValue(
+                        StarSignComponent(
+                            _gameRegistry.getComponent(STAR_SIGN_COMPONENT_ID)
+                        ).getValue(entity)
+                    )
+                ),
             dataType: TraitDataType.STRING,
             isTopLevelProperty: false,
             hidden: false
@@ -507,6 +511,9 @@ contract PirateNFTTokenURIHandler is
         uint256 affinityId = AffinityComponent(
             _gameRegistry.getComponent(AFFINITY_COMPONENT_ID)
         ).getValue(entity);
+        if (affinityId == 0) {
+            return abi.encode("None");
+        }
         string[] memory affinitiesArray = StringArrayComponent(
             _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
         ).getValue(ELEMENTAL_AFFINITIES);
@@ -521,6 +528,9 @@ contract PirateNFTTokenURIHandler is
         uint256 expertiseId = ExpertiseComponent(
             _gameRegistry.getComponent(EXPERTISE_COMPONENT_ID)
         ).getValue(entity);
+        if (expertiseId == 0) {
+            return abi.encode("None");
+        }
         string[] memory expertiseArray = StringArrayComponent(
             _gameRegistry.getComponent(STRING_ARRAY_COMPONENT_ID)
         ).getValue(EXPERTISE_VALUES);

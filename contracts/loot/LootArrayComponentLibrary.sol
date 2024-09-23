@@ -210,6 +210,28 @@ library LootArrayComponentLibrary {
     }
 
     /**
+     * @dev Handle burning LootSystemV2 Loot inputs
+     * @param items Array of ILootSystemV2.Loot
+     * @param account Account to burn the input fees from
+     */
+    function burnV2Loot(
+        ILootSystemV2.Loot[] memory items,
+        address account
+    ) internal {
+        for (uint256 i = 0; i < items.length; i++) {
+            (address tokenContract, uint256 lootId) = EntityLibrary
+                .entityToToken(items[i].lootEntity);
+            _burnInput(
+                account,
+                tokenContract,
+                lootId,
+                items[i].amount,
+                uint32(items[i].lootType)
+            );
+        }
+    }
+
+    /**
      * @dev Converts LootArrayComponent to LootSystem Loot array
      */
     function convertLootEntityArrayToLoot(

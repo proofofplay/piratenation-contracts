@@ -36,6 +36,10 @@ uint256 constant STAR_SIGN_GAME_GLOBALS_ID = uint256(
     keccak256("game.piratenation.global.traits.starsign")
 );
 
+uint256 constant RANDOM_PIRATE_ENTITY = uint256(
+    keccak256("game.piratenation.starterpiratesystem.random")
+);
+
 bytes32 constant API_MINTER_ROLE = keccak256("API_MINTER_ROLE");
 
 /**
@@ -126,13 +130,11 @@ contract StarterPirateSystemV2 is
         uint256 amount,
         uint256 randomWord
     ) external onlyRole(MINTER_ROLE) whenNotPaused returns (uint256) {
-        if (account == address(0) || lootId == 0 || randomWord == 0) {
+        if (account == address(0) || randomWord == 0) {
             revert InvalidParams();
         }
         uint256 accountEntity = EntityLibrary.addressToEntity(account);
         _updateUserMintedCount(accountEntity, 1, false);
-        // Check that TokenTemplate exists and is in the correct range
-        _checkValidMixin(lootId);
 
         MintCounterComponent mintCounterComponent = MintCounterComponent(
             _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
@@ -242,19 +244,20 @@ contract StarterPirateSystemV2 is
         uint256 amount,
         bool enforceSingle
     ) internal {
-        if (lootId == 0 || account == address(0) || amount == 0) {
+        if (account == address(0) || amount == 0) {
             revert InvalidParams();
         }
         // Use MintedStarterPirateComponent to check if caller
         uint256 accountEntity = EntityLibrary.addressToEntity(account);
         _updateUserMintedCount(accountEntity, amount, enforceSingle);
         // Check that TokenTemplate exists and is in the correct range
-        _checkValidMixin(lootId);
 
         MintCounterComponent mintCounterComponent = MintCounterComponent(
             _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
         );
         uint256 currentNftId = mintCounterComponent.getValue(ID);
+
+        _checkValidLootId(lootId);
 
         for (uint256 idx = 0; idx < amount; idx++) {
             // Increment current token id to next id
@@ -295,6 +298,15 @@ contract StarterPirateSystemV2 is
         MixinComponent mixinComponent = MixinComponent(
             _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
         );
+
+        if (lootId == RANDOM_PIRATE_ENTITY) {
+            uint256[] memory mixinOptions = StaticEntityListComponent(
+                _gameRegistry.getComponent(STATIC_ENTITY_LIST_COMPONENT_ID)
+            ).getValue(ID);
+            lootId = mixinOptions[randomWord % mixinOptions.length];
+        }
+        _checkValidMixin(lootId);
+
         uint256[] memory mixins = new uint256[](1);
         mixins[0] = lootId;
         mixinComponent.setValue(entity, mixins);
@@ -384,19 +396,27 @@ contract StarterPirateSystemV2 is
         IsPirateComponent(_gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID))
             .setValue(entity, true);
     }
-
-    function _checkValidMixin(uint256 mixinEntity) internal view {
+    function _isValidMixin(uint256 mixinEntity) internal view returns (bool) {
         uint256[] memory validMixinList = StaticEntityListComponent(
             _gameRegistry.getComponent(STATIC_ENTITY_LIST_COMPONENT_ID)
         ).getValue(ID);
-        bool validMixin = false;
         for (uint256 i = 0; i < validMixinList.length; i++) {
             if (validMixinList[i] == mixinEntity) {
-                validMixin = true;
-                break;
+                return true;
             }
         }
-        if (validMixin == false) {
+        return false;
+    }
+
+    function _checkValidLootId(uint256 lootId) internal view {
+        if (_isValidMixin(lootId) || (lootId == RANDOM_PIRATE_ENTITY)) {
+            return;
+        }
+        revert TemplateNotFound();
+    }
+
+    function _checkValidMixin(uint256 mixinEntity) internal view {
+        if (!_isValidMixin(mixinEntity)) {
             revert TemplateNotFound();
         }
     }

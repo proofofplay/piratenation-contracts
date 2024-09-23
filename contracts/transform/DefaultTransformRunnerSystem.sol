@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 
 import "../libraries/RandomLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 import {GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 
@@ -27,8 +28,38 @@ uint256 constant ID = uint256(
 contract DefaultTransformRunnerSystem is BaseTransformRunnerSystem {
     /** ERRORS */
 
+    /// @notice Error thrown when input length does not match transform definition
+    error InputLengthMismatch(uint256 expected, uint256 actual);
+
+    /// @notice Error thrown when missing inputs or outputs for a transform
+    error MissingInputsOrOutputs();
+
+    /// @notice Error thrown when a transform input token type is invalid
+    error InvalidInputTokenType();
+
+    /// @notice Error thrown when an ERC20 input is invalid
+    error InvalidERC20Input();
+
+    /// @notice Error thrown when an ERC721 input is invalid
+    error InvalidERC721Input();
+
+    /// @notice Error thrown when token type does not match
+    error TokenTypeNotMatching(
+        ILootSystemV2.LootType expected,
+        ILootSystemV2.LootType actual
+    );
+
+    /// @notice Error thrown when token contract does not match
+    error TokenContractNotMatching(address expected, address actual);
+
+    /// @notice Error thrown when token id does not match
+    error TokenIdNotMatching(uint256 expected, uint256 actual);
+
+    /// @notice Error thrown when a user does not own a given token
+    error NotOwner(address tokenContract, uint256 tokenId);
+
     /// @notice Error when input lengths don't match
-    error InputLengthMismatch();
+    error RefundInputLengthMismatch();
 
     /// @notice Error when there is no config for the runner
     error TransformRunnerConfigNotFound(uint256 transformEntity);
@@ -48,16 +79,17 @@ contract DefaultTransformRunnerSystem is BaseTransformRunnerSystem {
      * @inheritdoc ITransformRunnerSystem
      */
     function startTransform(
-        TransformInstanceComponentLayout memory,
+        TransformInstanceComponentLayout memory transformInstance,
         uint256,
         TransformParams calldata params
     )
         external
-        view
         override
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
         returns (bool needsVrf)
     {
+        // Validate and burn inputs
+        _validateAndBurnTransformInputs(transformInstance.account, params);
         // Set needVRF flag
         needsVrf = _needsVrf(params.transformEntity);
     }
@@ -143,6 +175,117 @@ contract DefaultTransformRunnerSystem is BaseTransformRunnerSystem {
     }
 
     /** INTERNAL */
+
+    /**
+     * Validates all inputs and burns them
+     */
+
+    function _validateAndBurnTransformInputs(
+        address account,
+        TransformParams calldata params
+    ) internal {
+        TransformInputComponentLayout
+            memory transformDefInputs = _getTransformInputs(
+                params.transformEntity
+            );
+
+        // Error if we're missing inputs
+        if (transformDefInputs.inputType.length == 0) {
+            revert MissingInputsOrOutputs();
+        }
+
+        // Make sure we have the right number of inputs from the caller
+        if (params.inputs.length != transformDefInputs.inputType.length) {
+            revert InputLengthMismatch(
+                transformDefInputs.inputType.length,
+                params.inputs.length
+            );
+        }
+
+        // Verify that the params have inputs that meet the transform requirements
+        ILootSystemV2.LootType defTokenType;
+        uint256 defTokenId;
+        address defTokenContract;
+        uint256 defAmount;
+        ILootSystemV2.Loot memory input;
+        uint256 inputLootId;
+        address inputTokenContract;
+
+        for (uint8 idx; idx < transformDefInputs.inputType.length; ++idx) {
+            defTokenType = ILootSystemV2.LootType(
+                transformDefInputs.inputType[idx]
+            );
+            (defTokenContract, defTokenId) = EntityLibrary.entityToToken(
+                transformDefInputs.inputEntity[idx]
+            );
+            defAmount = transformDefInputs.amount[idx];
+
+            input = params.inputs[idx];
+
+            // Make sure that token type matches between definition and id
+            if (input.lootType != defTokenType) {
+                revert TokenTypeNotMatching(defTokenType, input.lootType);
+            }
+
+            (inputTokenContract, inputLootId) = EntityLibrary.entityToToken(
+                input.lootEntity
+            );
+
+            // Make sure a specific token contract is matching if specified
+            if (
+                defTokenContract != address(0) &&
+                defTokenContract != inputTokenContract
+            ) {
+                revert TokenContractNotMatching(
+                    defTokenContract,
+                    inputTokenContract
+                );
+            }
+
+            // Make sure token id is matching if specified
+            if (defTokenId != 0 && defTokenId != inputLootId) {
+                revert TokenIdNotMatching(defTokenId, inputLootId);
+            }
+
+            // Burn ERC20 and ERC1155 inputs
+            if (defTokenType == ILootSystemV2.LootType.ERC20) {
+                if (
+                    inputTokenContract == address(0) ||
+                    input.amount == 0 ||
+                    inputLootId != 0
+                ) {
+                    revert InvalidERC20Input();
+                }
+
+                // Burn ERC20 immediately, will be refunded if not consumable later
+                IGameCurrency(inputTokenContract).burn(
+                    account,
+                    defAmount * params.count
+                );
+            } else if (defTokenType == ILootSystemV2.LootType.ERC1155) {
+                // Burn ERC1155 inputs immediately, refund later if they don't need to be burned
+                IGameItems(inputTokenContract).burn(
+                    account,
+                    inputLootId,
+                    defAmount * params.count
+                );
+            } else if (defTokenType == ILootSystemV2.LootType.ERC721) {
+                if (input.amount != 1) {
+                    revert InvalidERC721Input();
+                }
+
+                // Validate ownership of NFT
+                if (
+                    IERC721(inputTokenContract).ownerOf(inputLootId) != account
+                ) {
+                    revert NotOwner(inputTokenContract, inputLootId);
+                }
+            } else if (defTokenType == ILootSystemV2.LootType.UNDEFINED) {
+                revert InvalidInputTokenType();
+            }
+        }
+    }
+
     function _isTransformAvailable(
         address account,
         TransformParams calldata params,
@@ -238,7 +381,7 @@ contract DefaultTransformRunnerSystem is BaseTransformRunnerSystem {
                 refund.successRefundProbability.length !=
                 transformInputs.inputType.length
             ) {
-                revert InputLengthMismatch();
+                revert RefundInputLengthMismatch();
             }
 
             for (uint256 i; i < refund.successRefundProbability.length; ++i) {
@@ -304,7 +447,7 @@ contract DefaultTransformRunnerSystem is BaseTransformRunnerSystem {
             (refundLayout.successRefundProbability.length !=
                 transformInstanceInputs.lootType.length)
         ) {
-            revert InputLengthMismatch();
+            revert RefundInputLengthMismatch();
         }
 
         // Unlock inputs, grant XP, and potentially burn inputs
