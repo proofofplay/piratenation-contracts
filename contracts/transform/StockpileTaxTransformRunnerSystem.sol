@@ -20,6 +20,11 @@ uint256 constant ID = uint256(
 );
 
 contract StockpileTaxTransformRunnerSystem is BaseTransformRunnerSystem {
+    /** ERRORS */
+
+    /// @notice Tax Transform not found
+    error TaxTransformNotFound();
+
     /** PUBLIC */
 
     /**
@@ -53,6 +58,9 @@ contract StockpileTaxTransformRunnerSystem is BaseTransformRunnerSystem {
                     STOCKPILE_TAX_RUNNER_CONFIG_COMPONENT_ID
                 )
             ).getLayoutValue(transformEntity);
+        if (config.linearTaxRateLootSetEntity == 0) {
+            revert TaxTransformNotFound();
+        }
         // Get the current stockpile count for the user
         StockpileCraftCountComponent stockpileCraftCountComponent = StockpileCraftCountComponent(
                 _gameRegistry.getComponent(STOCKPILE_CRAFT_COUNT_COMPONENT_ID)
@@ -68,11 +76,6 @@ contract StockpileTaxTransformRunnerSystem is BaseTransformRunnerSystem {
         address lootEntityArrayComponentAddress = _gameRegistry.getComponent(
             LOOT_ENTITY_ARRAY_COMPONENT_ID
         );
-        ILootSystemV2.Loot[] memory baseFeeLootSet = LootArrayComponentLibrary
-            .convertLootEntityArrayToLoot(
-                lootEntityArrayComponentAddress,
-                config.baseLootSetEntity
-            );
         ILootSystemV2.Loot[]
             memory linearTaxRateLootSet = LootArrayComponentLibrary
                 .convertLootEntityArrayToLoot(
@@ -80,26 +83,32 @@ contract StockpileTaxTransformRunnerSystem is BaseTransformRunnerSystem {
                     config.linearTaxRateLootSetEntity
                 );
         ILootSystemV2.Loot[] memory finalFeeLootSet = new ILootSystemV2.Loot[](
-            baseFeeLootSet.length
+            linearTaxRateLootSet.length
         );
-        // Calculate the fee for the user
+        // Calculate fee
         uint256 linearMultiplier;
         for (uint256 count = 0; count < params.count; count++) {
             linearMultiplier = currentStockpileCraftCount <
                 config.flatTaxThreshold
                 ? currentStockpileCraftCount
                 : (config.flatTaxThreshold - 1);
-            for (uint256 j = 0; j < baseFeeLootSet.length; j++) {
-                finalFeeLootSet[j].lootType = baseFeeLootSet[j].lootType;
-                finalFeeLootSet[j].lootEntity = baseFeeLootSet[j].lootEntity;
-                finalFeeLootSet[j].amount +=
-                    baseFeeLootSet[j].amount +
-                    (linearTaxRateLootSet[j].amount * linearMultiplier);
+            if (linearMultiplier > 0) {
+                for (uint256 j = 0; j < linearTaxRateLootSet.length; j++) {
+                    finalFeeLootSet[j].lootType = linearTaxRateLootSet[j]
+                        .lootType;
+                    finalFeeLootSet[j].lootEntity = linearTaxRateLootSet[j]
+                        .lootEntity;
+                    finalFeeLootSet[j].amount += (linearTaxRateLootSet[j]
+                        .amount * linearMultiplier);
+                }
             }
+
             currentStockpileCraftCount++;
         }
-        // Burn the fee loot set
-        LootArrayComponentLibrary.burnV2Loot(finalFeeLootSet, account);
+        if (currentStockpileCraftCount > 1) {
+            // Burn fee
+            LootArrayComponentLibrary.burnV2Loot(finalFeeLootSet, account);
+        }
 
         // Update the total craft count for the user
         stockpileCraftCountComponent.setValue(
