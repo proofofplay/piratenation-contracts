@@ -21,6 +21,8 @@ import {ParentComponent, ID as PARENT_COMPONENT_ID} from "../generated/component
 import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
 import {CountingSystem, ID as COUNTING_SYSTEM_ID} from "../counting/CountingSystem.sol";
 import {GenerationComponent, ID as GENERATION_COMPONENT_ID} from "../generated/components/GenerationComponent.sol";
+import {GameNFTV2Upgradeable} from "../tokens/gamenft/GameNFTV2Upgradeable.sol";
+import {IsPirateComponent, Layout as IsPirateComponentLayout, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.bountytransformrunnersystem")
@@ -280,8 +282,18 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
                 memory activeBounty = bountyTrackerComponent.getLayoutValue(
                     entityInputs[i]
                 );
-            // Get NFT current owner address
-            address nftOwner = IERC721(tokenContract).ownerOf(tokenId);
+            // Handle crosschain nfts
+            bool nftExists = GameNFTV2Upgradeable(tokenContract).exists(
+                tokenId
+            );
+            if (!nftExists) {
+                bountyTrackerComponent.remove(entityInputs[i]);
+                failedBounty = true;
+                continue;
+            }
+            address nftOwner = GameNFTV2Upgradeable(tokenContract).ownerOf(
+                tokenId
+            );
 
             // If activeBountyId matches and caller is owner then clear the component
             if (
@@ -345,6 +357,9 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         GenerationComponent generationComponent = GenerationComponent(
             _gameRegistry.getComponent(GENERATION_COMPONENT_ID)
         );
+        IsPirateComponent isPirateComponent = IsPirateComponent(
+            _gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID)
+        );
         for (uint256 i = 0; i < entityNfts.length; ++i) {
             // Check Pirate NFT
             _checkPirateNft(
@@ -352,6 +367,7 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
                 generationComponent,
                 generationCheckComponent,
                 bountyTrackerComponent,
+                isPirateComponent,
                 entityNfts[i],
                 account
             );
@@ -396,9 +412,14 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         GenerationComponent generationComponent,
         GenerationCheckComponentLayout memory generationCheckComponent,
         TransformBountyTrackerComponent transformBountyTrackerComponent,
+        IsPirateComponent isPirateComponent,
         uint256 entityId,
         address account
     ) internal {
+        // Check if NFT is Pirate
+        if (isPirateComponent.getValue(entityId) == false) {
+            revert NotPirateNFT();
+        }
         (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
             entityId
         );

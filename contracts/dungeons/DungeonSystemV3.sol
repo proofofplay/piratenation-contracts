@@ -19,7 +19,7 @@ import {GauntletScheduleComponent, ID as GauntletScheduleComponentId, Layout as 
 import {TransferStatusComponent, ID as TRANSFER_STATUS_COMPONENT_ID} from "../generated/components/TransferStatusComponent.sol";
 import {TransformInputComponent, ID as TRANSFORM_INPUT_COMPONENT_ID} from "../generated/components/TransformInputComponent.sol";
 import {CountingSystem, ID as COUNTING_SYSTEM} from "../counting/CountingSystem.sol";
-import {IAccountXpSystem, ID as ACCOUNT_XP_SYSTEM_ID} from "../trade/IAccountXpSystem.sol";
+import {IAccountXpSystem, BASE_ACCOUNT_SKILL_ID, ID as ACCOUNT_XP_SYSTEM_ID} from "../trade/IAccountXpSystem.sol";
 import {ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {TransferLibrary, TransferStatus} from "../trade/TransferLibrary.sol";
@@ -892,9 +892,10 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
             amountToGrant
         );
         // Grant AccountXp
-        IAccountXpSystem(_getSystem(ACCOUNT_XP_SYSTEM_ID)).grantAccountXp(
+        IAccountXpSystem(_getSystem(ACCOUNT_XP_SYSTEM_ID)).grantAccountSkillXp(
             accountEntity,
-            amountToGrant
+            amountToGrant,
+            BASE_ACCOUNT_SKILL_ID
         );
     }
 

@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "../GameRegistryConsumerUpgradeable.sol";
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {TimeRangeLibrary} from "../core/TimeRangeLibrary.sol";
-import {ILootSystem} from "../loot/ILootSystem.sol";
+import {ILootSystemV2, ID as LOOT_SYSTEM_V2_ID} from "../loot/ILootSystemV2.sol";
 
 import {IGachaSystem, ID} from "./IGachaSystem.sol";
 import {StarterPirateSystemV2, ID as STARTER_PIRATE_SYSTEM_ID} from "../starterpirate/StarterPirateSystemV2.sol";
@@ -13,7 +13,7 @@ import {GachaComponent, Layout as GachaComponentLayout, ID as GACHA_COMPONENT_ID
 import {ActiveGachasComponent, Layout as ActiveGachasComponentLayout, ID as ACTIVE_GACHAS_COMPONENT_ID} from "../generated/components/ActiveGachasComponent.sol";
 import {CounterComponent, ID as COUNTER_COMPONENT_ID} from "../generated/components/CounterComponent.sol";
 import {EnabledComponent, ID as ENABLED_COMPONENT_ID} from "../generated/components/EnabledComponent.sol";
-import {LootArrayComponent, Layout as LootArrayComponentLayout, ID as LOOT_ARRAY_COMPONENT_ID} from "../generated/components/LootArrayComponent.sol";
+import {LootEntityArrayComponent, Layout as LootEntityArrayComponentLayout, ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
 import {ID as TIME_RANGE_COMPONENT_ID} from "../generated/components/TimeRangeComponent.sol";
 
 import {RANDOMIZER_ROLE} from "../Constants.sol";
@@ -90,11 +90,14 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
         if (gachaComponentLayout.inputLootEntity == 0) {
             revert GachaNotSetup(gachaComponentId);
         }
+
         // Handle entry fee
-        LootArrayComponentLibrary.burnLootArray(
-            _gameRegistry.getComponent(LOOT_ARRAY_COMPONENT_ID),
-            account,
-            gachaComponentLayout.inputLootEntity
+        LootArrayComponentLibrary.burnV2Loot(
+            LootArrayComponentLibrary.convertLootEntityArrayToLoot(
+                address(_gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID)),
+                gachaComponentLayout.inputLootEntity
+            ),
+            account
         );
 
         // Empty Gacha check
@@ -107,7 +110,7 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
         }
         counterComponent.setValue(gachaComponentId, currentCount - 1);
 
-        // / Kick off VRF request
+        // Kick off VRF request
         VRFRequest storage vrfRequest = _vrfRequests[_requestRandomWords(1)];
         vrfRequest.account = account;
         vrfRequest.gachaComponentId = gachaComponentId;
@@ -139,29 +142,35 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
 
             uint256 randomIndex = randomWords[0] % currLength;
 
-            LootArrayComponent lootArrayComponent = LootArrayComponent(
-                _gameRegistry.getComponent(LOOT_ARRAY_COMPONENT_ID)
-            );
+            LootEntityArrayComponent lootEntityArrayComponent = LootEntityArrayComponent(
+                    _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID)
+                );
 
             //pull the lootItem for that Index
             //todo: Should these be keccak's instead of this weird + 1 thing.
-            LootArrayComponentLayout memory randomLoot = lootArrayComponent
-                .getLayoutValue(request.gachaComponentId + randomIndex);
+            LootEntityArrayComponentLayout
+                memory randomLoot = lootEntityArrayComponent.getLayoutValue(
+                    request.gachaComponentId + randomIndex
+                );
 
-            LootArrayComponentLayout memory lastLoot = lootArrayComponent
-                .getLayoutValue(request.gachaComponentId + subLength);
+            LootEntityArrayComponentLayout
+                memory lastLoot = lootEntityArrayComponent.getLayoutValue(
+                    request.gachaComponentId + subLength
+                );
 
             // if item is not the last in the array, we should swap it with the last item in the array
             if (randomIndex != subLength) {
                 //swap the lastLootEntity with the randomLootEntity
-                lootArrayComponent.setLayoutValue(
+                lootEntityArrayComponent.setLayoutValue(
                     request.gachaComponentId + randomIndex,
                     lastLoot
                 );
             }
 
             //remove the last element from the association so it can no longer be pulled.
-            lootArrayComponent.remove(request.gachaComponentId + subLength);
+            lootEntityArrayComponent.remove(
+                request.gachaComponentId + subLength
+            );
 
             _rewardLoots(randomLoot, request.account, randomWords[0]);
 
@@ -196,39 +205,26 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
      * Todo: This should be inside of loot system instead of here.
      */
     function _rewardLoots(
-        LootArrayComponentLayout memory randomLoot,
+        LootEntityArrayComponentLayout memory randomLoot,
         address account,
         uint256 randomWord
     ) internal {
+        ILootSystemV2.Loot[] memory loot = new ILootSystemV2.Loot[](
+            randomLoot.lootType.length
+        );
+
         for (uint i = 0; i < randomLoot.lootType.length; i++) {
-            ILootSystem.Loot[] memory loot = new ILootSystem.Loot[](1);
-            loot[0] = ILootSystem.Loot(
-                ILootSystem.LootType(randomLoot.lootType[i]),
-                randomLoot.tokenContract[i],
-                randomLoot.lootId[i],
+            loot[i] = ILootSystemV2.Loot(
+                ILootSystemV2.LootType(randomLoot.lootType[i]),
+                randomLoot.lootEntity[i],
                 randomLoot.amount[i]
             );
-
-            // If loot is StarterPirate then grant separately
-            StarterPirateSystemV2 starterPirateSystem = StarterPirateSystemV2(
-                _gameRegistry.getSystem(STARTER_PIRATE_SYSTEM_ID)
-            );
-            if (loot[0].tokenContract == address(starterPirateSystem)) {
-                starterPirateSystem.grantLootWithRandomWord(
-                    account,
-                    loot[0].lootId,
-                    1,
-                    randomWord
-                );
-            } else {
-                // Grant the loot to the user through lootsystem
-                _lootSystem().grantLootWithRandomWord(
-                    account,
-                    loot,
-                    randomWord
-                );
-            }
         }
+        ILootSystemV2(_getSystem(LOOT_SYSTEM_V2_ID)).grantLootWithRandomWord(
+            account,
+            loot,
+            randomWord
+        );
     }
 
     function _checkActiveStatus(uint256 gachaComponentId) internal view {

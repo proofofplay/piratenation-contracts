@@ -3,10 +3,15 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/utils/Strings.sol";
 
+import {EntityLibrary} from "../core/EntityLibrary.sol";
+
 import {GameNFTV2Upgradeable, ITraitsProvider} from "./gamenft/GameNFTV2Upgradeable.sol";
 import {GENERATION_TRAIT_ID, XP_TRAIT_ID, IS_PIRATE_TRAIT_ID, LEVEL_TRAIT_ID, NAME_TRAIT_ID} from "../Constants.sol";
 import {MINTER_ROLE, TRUSTED_MIRROR_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {BatchComponentData} from "../GameRegistry.sol";
+import {SkinContainerComponent, Layout as SkinContainerComponentLayout, ID as SKIN_CONTAINER_COMPONENT_ID} from "../generated/components/SkinContainerComponent.sol";
+import {PIRATE_SKIN_GUID} from "../skin/PirateSkinSystem.sol";
+import {IGameItems, ID as GAME_ITEMS_CONTRACT_ID} from "../tokens/gameitems/IGameItems.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.piratenft"));
 
@@ -155,5 +160,40 @@ contract PirateNFTL2 is GameNFTV2Upgradeable {
         for (uint256 i = 0; i < ids.length; ++i) {
             _burn(ids[i]);
         }
+    }
+
+    /**
+     * @notice Add addtional logic handling for beforeTokenTransfer before passing to parent
+     * @inheritdoc GameNFTV2Upgradeable
+     */
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 firstTokenId,
+        uint256 batchSize
+    ) internal virtual override(GameNFTV2Upgradeable) {
+        uint256 pirateEntity = EntityLibrary.tokenToEntity(
+            address(this),
+            firstTokenId
+        );
+        SkinContainerComponent skinContainerComponent = SkinContainerComponent(
+            _gameRegistry.getComponent(SKIN_CONTAINER_COMPONENT_ID)
+        );
+        SkinContainerComponentLayout
+            memory skinContainerLayout = skinContainerComponent.getLayoutValue(
+                pirateEntity
+            );
+        // Mint equipped skin back to user
+        for (uint256 i = 0; i < skinContainerLayout.slotEntities.length; i++) {
+            if (skinContainerLayout.slotEntities[i] == PIRATE_SKIN_GUID) {
+                (address itemTokenContract, uint256 itemTokenId) = EntityLibrary
+                    .entityToToken(skinContainerLayout.skinEntities[i]);
+                IGameItems(itemTokenContract).mint(from, itemTokenId, 1);
+                skinContainerComponent.removeValueAtIndex(pirateEntity, i);
+                break;
+            }
+        }
+
+        super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
     }
 }

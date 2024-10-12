@@ -27,6 +27,9 @@ import {TransformRunnerComponent, Layout as TransformRunnerComponentLayout, ID a
 import {ID as TIME_RANGE_COMPONENT_ID} from "../generated/components/TimeRangeComponent.sol";
 import {EnabledComponent, Layout as EnabledComponentLayout, ID as ENABLED_COMPONENT_ID} from "../generated/components/EnabledComponent.sol";
 import {TimeRangeLibrary} from "../core/TimeRangeLibrary.sol";
+import {IAccountXpSystem, ID as ACCOUNT_XP_SYSTEM_ID} from "../trade/IAccountXpSystem.sol";
+import {ID as ACCOUNT_SKILLS_XP_GRANTED_ID} from "../generated/components/AccountSkillsXpGrantedComponent.sol";
+import {ID as ACCOUNT_SKILL_REQUIREMENTS_ID} from "../generated/components/AccountSkillRequirementsComponent.sol";
 
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 
@@ -108,6 +111,9 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
         uint16 numSuccess,
         uint16 maxSuccess
     );
+
+    /// @notice Zero param count
+    error ZeroParamCount();
 
     /** PUBLIC **/
 
@@ -329,6 +335,9 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
         TransformParams calldata params,
         address account
     ) internal returns (uint256) {
+        if (params.count == 0) {
+            revert ZeroParamCount();
+        }
         uint256 transformEntity = params.transformEntity;
 
         ITransformRunnerSystem[] memory transformRunners = _getTransformRunners(
@@ -680,10 +689,10 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
                     transformEntity
                 );
 
+        uint32 numFailures = transformInstance.count - numSuccess;
         accountTransformData.numPending -= transformInstance.count;
         accountTransformData.numCompletions += numSuccess;
-        accountTransformData.numFailed += (transformInstance.count -
-            numSuccess);
+        accountTransformData.numFailed += numFailures;
 
         // Update transform instance
         transformInstance.numSuccess = numSuccess;
@@ -720,6 +729,17 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
                     account,
                     loots,
                     numSuccess
+                );
+            }
+
+            if (_gameRegistry.getEntityHasComponent(transformEntity, ACCOUNT_SKILLS_XP_GRANTED_ID)) {
+                IAccountXpSystem(
+                    _gameRegistry.getSystem(ACCOUNT_XP_SYSTEM_ID)
+                ).grantAccountSkillsXp(
+                    accountEntity,
+                    transformEntity,
+                    numSuccess,
+                    numFailures
                 );
             }
 
@@ -819,6 +839,15 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
                 transformRunners[idx].isTransformAvailable(account, params) ==
                 false
             ) {
+                return false;
+            }
+        }
+
+        if (_gameRegistry.getEntityHasComponent(transformEntity, ACCOUNT_SKILL_REQUIREMENTS_ID)) {
+            if (!IAccountXpSystem(_gameRegistry.getSystem(ACCOUNT_XP_SYSTEM_ID)).hasRequiredSkills(
+                EntityLibrary.addressToEntity(account),
+                transformEntity
+            )) {
                 return false;
             }
         }
