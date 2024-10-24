@@ -15,7 +15,9 @@ import {OwnerComponent, ID as OWNER_COMPONENT_ID} from "../generated/components/
 import {CraftingSlotsGrantedComponent, ID as CRAFTING_SLOTS_GRANTED_COMPONENT_ID} from "../generated/components/CraftingSlotsGrantedComponent.sol";
 import {PendingIslandTransformListComponent, Layout as PendingIslandTransformListComponentLayout, ID as PENDING_ISLAND_TRANSFORM_LIST_COMPONENT_ID} from "../generated/components/PendingIslandTransformListComponent.sol";
 import {TransformCraftingBuildingTrackerComponent, ID as TRANSFORM_CRAFTING_BUILDING_TRACKER_COMPONENT_ID} from "../generated/components/TransformCraftingBuildingTrackerComponent.sol";
-import {CraftingBuildingRunnerConfigComponent, Layout as CraftingBuildingRunnerConfigComponentLayout, ID as CRAFTING_BUILDING_RUNNER_CONFIG_COMPONENT_ID} from "../generated/components/CraftingBuildingRunnerConfigComponent.sol";
+import {CraftingBuildingTransformConfigComponent, Layout as CraftingBuildingTransformConfigComponentLayout, ID as CRAFTING_BUILDING_TRANSFORM_CONFIG_COMPONENT_ID} from "../generated/components/CraftingBuildingTransformConfigComponent.sol";
+import {TransformConfigTimeLockComponent, Layout as TransformConfigTimeLockComponentLayout, ID as TRANSFORM_CONFIG_TIME_LOCK_COMPONENT_ID} from "../generated/components/TransformConfigTimeLockComponent.sol";
+import {TransformInstanceComponent, Layout as TransformInstanceComponentLayout, ID as TRANSFORM_INSTANCE_COMPONENT_ID} from "../generated/components/TransformInstanceComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.craftingbuildingtransformrunnersystem")
@@ -45,6 +47,9 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
     /// @notice ZeroSlotCount
     error ZeroSlotCount();
 
+    /// @notice NotFirstInQueue
+    error NotFirstInQueue();
+
     /** PUBLIC */
 
     /**
@@ -60,17 +65,17 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
      * @inheritdoc ITransformRunnerSystem
      */
     function startTransform(
-        TransformInstanceComponentLayout memory,
+        TransformInstanceComponentLayout memory transformInstance,
         uint256 transformInstanceEntity,
         TransformParams calldata params
     )
         external
         override
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
-        returns (bool needsVrf)
+        returns (bool needsVrf, bool skipTransformInstance)
     {
         // Validation checks performed in isTransformAvailable
-        uint256 instanceEntity = abi.decode(params.data, (uint256));
+        uint256 buildingInstanceEntity = abi.decode(params.data, (uint256));
 
         // Check queue slot count is not exceeded
         PendingIslandTransformListComponent pendingIslandTransformListComponent = PendingIslandTransformListComponent(
@@ -78,20 +83,19 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
                     PENDING_ISLAND_TRANSFORM_LIST_COMPONENT_ID
                 )
             );
+        PendingIslandTransformListComponentLayout
+            memory pendingList = pendingIslandTransformListComponent
+                .getLayoutValue(buildingInstanceEntity);
         if (
-            pendingIslandTransformListComponent
-                .getLayoutValue(instanceEntity)
-                .value
-                .length +
-                params.count >
-            getMaxQueueSlotCount(instanceEntity)
+            pendingList.value.length + params.count >
+            getMaxQueueSlotCount(buildingInstanceEntity)
         ) {
             revert ExceedsMaxQueueSlot();
         }
         uint256[] memory newInstances = new uint256[](1);
         newInstances[0] = transformInstanceEntity;
         pendingIslandTransformListComponent.append(
-            instanceEntity,
+            buildingInstanceEntity,
             PendingIslandTransformListComponentLayout(newInstances)
         );
         // Record the instance entity used for the transform
@@ -99,9 +103,45 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
             _gameRegistry.getComponent(
                 TRANSFORM_CRAFTING_BUILDING_TRACKER_COMPONENT_ID
             )
-        ).setValue(transformInstanceEntity, instanceEntity);
+        ).setValue(transformInstanceEntity, buildingInstanceEntity);
+        // If no pending transforms, set the start time to now
+        if (pendingList.value.length == 0) {
+            return (false, false);
+        }
+        // Handle setting transformInstanceEntity in runner
+        skipTransformInstance = true;
+        // Get the previous transform instance and check if its still running
+        TransformInstanceComponent transformInstanceComponent = TransformInstanceComponent(
+                _gameRegistry.getComponent(TRANSFORM_INSTANCE_COMPONENT_ID)
+            );
+        TransformInstanceComponentLayout
+            memory previousTransformInstance = transformInstanceComponent
+                .getLayoutValue(
+                    pendingList.value[pendingList.value.length - 1]
+                );
+        TransformConfigTimeLockComponentLayout
+            memory config = TransformConfigTimeLockComponent(
+                _gameRegistry.getComponent(
+                    TRANSFORM_CONFIG_TIME_LOCK_COMPONENT_ID
+                )
+            ).getLayoutValue(previousTransformInstance.transformEntity);
+        // If previous transform is still running, set the start time to the previous transform's start time + config.value
+        if (
+            block.timestamp > previousTransformInstance.startTime + config.value
+        ) {
+            transformInstance.startTime = uint32(block.timestamp);
+        } else {
+            transformInstance.startTime =
+                previousTransformInstance.startTime +
+                config.value;
+        }
+        // Save the transform instance
+        transformInstanceComponent.setLayoutValue(
+            transformInstanceEntity,
+            transformInstance
+        );
 
-        return false;
+        return (needsVrf, skipTransformInstance);
     }
 
     /**
@@ -138,15 +178,29 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
         uint256[]
             memory pendingCraftTransforms = pendingIslandTransformListComponent
                 .getValue(instanceEntity);
-
-        for (uint256 idx; idx < pendingCraftTransforms.length; ++idx) {
-            if (pendingCraftTransforms[idx] == transformInstanceEntity) {
-                pendingIslandTransformListComponent.removeValueAtIndex(
-                    instanceEntity,
-                    idx
-                );
-                break;
+        // Only remove if it is the first in the queue
+        if (pendingCraftTransforms[0] != transformInstanceEntity) {
+            revert NotFirstInQueue();
+        }
+        if (pendingCraftTransforms.length == 1) {
+            pendingIslandTransformListComponent.removeValueAtIndex(
+                instanceEntity,
+                0
+            );
+        } else {
+            // To keep the queue in order, remove the first transform and update the list
+            uint256[] memory newPendingCraftTransforms = new uint256[](
+                pendingCraftTransforms.length - 1
+            );
+            for (uint256 idx; idx < newPendingCraftTransforms.length; ++idx) {
+                newPendingCraftTransforms[idx] = pendingCraftTransforms[
+                    idx + 1
+                ];
             }
+            pendingIslandTransformListComponent.setValue(
+                instanceEntity,
+                newPendingCraftTransforms
+            );
         }
 
         return (numSuccess, randomWord);
@@ -211,18 +265,12 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
     function _isCompleteable(
         TransformInstanceComponentLayout memory transformInstance
     ) internal view returns (bool) {
-        CraftingBuildingRunnerConfigComponentLayout
-            memory buildingConfig = CraftingBuildingRunnerConfigComponent(
-                _gameRegistry.getComponent(
-                    CRAFTING_BUILDING_RUNNER_CONFIG_COMPONENT_ID
-                )
-            ).getLayoutValue(transformInstance.transformEntity);
+        uint32 timeLock = TransformConfigTimeLockComponent(
+            _gameRegistry.getComponent(TRANSFORM_CONFIG_TIME_LOCK_COMPONENT_ID)
+        ).getLayoutValue(transformInstance.transformEntity).value;
 
         // Check if Transform valid to end
-        if (
-            block.timestamp <
-            transformInstance.startTime + buildingConfig.timeLock
-        ) {
+        if (block.timestamp < transformInstance.startTime + timeLock) {
             return false;
         }
 
@@ -282,11 +330,12 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
         uint256 transformEntity
     ) internal view {
         uint256 itemEntity = _getObjectEntity(instanceEntity);
-        uint256[] memory validBuildings = CraftingBuildingRunnerConfigComponent(
-            _gameRegistry.getComponent(
-                CRAFTING_BUILDING_RUNNER_CONFIG_COMPONENT_ID
-            )
-        ).getLayoutValue(transformEntity).validCraftingBuildings;
+        uint256[]
+            memory validBuildings = CraftingBuildingTransformConfigComponent(
+                _gameRegistry.getComponent(
+                    CRAFTING_BUILDING_TRANSFORM_CONFIG_COMPONENT_ID
+                )
+            ).getLayoutValue(transformEntity).value;
         bool found = false;
         for (uint256 i = 0; i < validBuildings.length; i++) {
             if (validBuildings[i] == itemEntity) {

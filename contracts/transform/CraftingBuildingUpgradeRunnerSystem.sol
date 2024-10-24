@@ -57,7 +57,7 @@ contract CraftingBuildingUpgradeRunnerSystem is BaseTransformRunnerSystem {
         external
         override
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
-        returns (bool needsVrf)
+        returns (bool needsVrf, bool skipTransformInstance)
     {
         uint256 instanceEntity = abi.decode(params.data, (uint256));
         if (instanceEntity == 0) {
@@ -95,7 +95,7 @@ contract CraftingBuildingUpgradeRunnerSystem is BaseTransformRunnerSystem {
             _gameRegistry.getComponent(SCENE_OBJECT_GAME_ITEM_COMPONENT_ID)
         ).setValue(instanceEntity, config.nextLevelEntity);
 
-        return false;
+        return (needsVrf, skipTransformInstance);
     }
 
     /**

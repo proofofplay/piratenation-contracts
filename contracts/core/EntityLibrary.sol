@@ -68,4 +68,17 @@ library EntityLibrary {
         }
         return (tokenId << 160) | uint160(tokenAddress);
     }
+
+    /**
+     * @dev Pack an account and entity ID together and keccak256 hash them, then return the uint value of the hash
+     * @param account  Account address
+     * @param entity       Entity ID
+     * @return              Uint256 value of the keccak256 hash
+     */
+    function accountSubEntity(
+        address account,
+        uint256 entity
+    ) internal pure returns (uint256) {
+        return uint256((keccak256(abi.encodePacked(account, entity))));
+    }
 }

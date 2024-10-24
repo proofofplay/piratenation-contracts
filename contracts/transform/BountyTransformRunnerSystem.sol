@@ -18,10 +18,9 @@ import {EntityListComponent, Layout as EntityListComponentLayout, ID as ENTITY_L
 import {GenerationCheckComponent, Layout as GenerationCheckComponentLayout, ID as GENERATION_CHECK_COMPONENT_ID} from "../generated/components/GenerationCheckComponent.sol";
 import {TransformBountyTrackerComponent, Layout as TransformBountyTrackerComponentLayout, ID as TRANSFORM_BOUNTY_TRACKER_ID} from "../generated/components/TransformBountyTrackerComponent.sol";
 import {ParentComponent, ID as PARENT_COMPONENT_ID} from "../generated/components/ParentComponent.sol";
-import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
-import {CountingSystem, ID as COUNTING_SYSTEM_ID} from "../counting/CountingSystem.sol";
 import {GenerationComponent, ID as GENERATION_COMPONENT_ID} from "../generated/components/GenerationComponent.sol";
 import {GameNFTV2Upgradeable} from "../tokens/gamenft/GameNFTV2Upgradeable.sol";
+import {CounterComponent, ID as COUNTER_COMPONENT_ID} from "../generated/components/CounterComponent.sol";
 import {IsPirateComponent, Layout as IsPirateComponentLayout, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 
 uint256 constant ID = uint256(
@@ -40,14 +39,14 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
     /// @notice Error when NFT not Pirate
     error NotPirateNFT();
 
-    /// @notice Error when Bounty not in progress
-    error BountyNotInProgress();
-
     /// @notice Error Bounty still running
     error BountyStillRunning();
 
     /// @notice Error when invalid generation
     error InvalidGeneration();
+
+    /// @notice Error when invalid amount of pirates staked
+    error InvalidAmountOfPiratesStaked();
 
     /** PUBLIC */
 
@@ -71,7 +70,7 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         external
         override
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
-        returns (bool needsVrf)
+        returns (bool needsVrf, bool skipTransformInstance)
     {
         uint256 transformEntity = params.transformEntity;
         address account = transformInstance.account;
@@ -83,7 +82,7 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
 
         uint256[] memory entities = abi.decode(params.data, (uint256[]));
 
-        if (transformEntity == 0 || entities.length == 0) {
+        if (entities.length == 0) {
             revert InvalidInputs();
         }
 
@@ -97,7 +96,7 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
             entities.length < runnerConfig.lowerBound ||
             entities.length > runnerConfig.upperBound
         ) {
-            revert InvalidInputs();
+            revert InvalidAmountOfPiratesStaked();
         }
 
         // Get parent
@@ -117,33 +116,20 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
             transformInstanceEntity,
             parentEntity
         );
-
-        // Add a cooldown on this User Wallet + Bounty Component Group ID to ensure user can only run 1 type of this Bounty at a time
-        if (
-            ICooldownSystem(_getSystem(COOLDOWN_SYSTEM_ID))
-                .updateAndCheckCooldown(
-                    EntityLibrary.addressToEntity(account),
-                    parentEntity,
-                    runnerConfig.timeLock
-                )
-        ) {
-            revert BountyStillRunning();
-        }
-
-        // Increment the pending count for this bounty group (parentEntity) by 1
-        CountingSystem(_gameRegistry.getSystem(COUNTING_SYSTEM_ID))
-            .incrementCount(
-                parentEntity,
-                EntityLibrary.addressToEntity(account),
-                1
-            );
+        // Set parent bounty group count to 1 to indicate this type of bounty is in progress
+        uint256 bountyParentTransformId = EntityLibrary.accountSubEntity(
+            account,
+            parentEntity
+        );
+        CounterComponent(_gameRegistry.getComponent(COUNTER_COMPONENT_ID))
+            .setValue(bountyParentTransformId, 1);
 
         // Store bounty nfts on the transform instance
         EntityListComponent(
             _gameRegistry.getComponent(ENTITY_LIST_COMPONENT_ID)
         ).setValue(transformInstanceEntity, entities);
 
-        return false;
+        return (needsVrf, skipTransformInstance);
     }
 
     /**
@@ -179,12 +165,17 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
             numSuccess = transformInstance.count;
         }
 
-        // Set pending bounty count to 0 for the parent bounty group
-        CountingSystem(_gameRegistry.getSystem(COUNTING_SYSTEM_ID)).setCount(
-            parentEntity,
-            EntityLibrary.addressToEntity(account),
-            0
+        uint256 bountyParentTransformId = EntityLibrary.accountSubEntity(
+            account,
+            parentEntity
         );
+        CounterComponent counterComponent = CounterComponent(
+            _gameRegistry.getComponent(COUNTER_COMPONENT_ID)
+        );
+        // Remove parent bounty group count to indicate this type of bounty is no longer in progress
+        if (counterComponent.has(bountyParentTransformId)) {
+            counterComponent.remove(bountyParentTransformId);
+        }
 
         return (numSuccess, randomWord);
     }
@@ -230,11 +221,15 @@ contract BountyTransformRunnerSystem is BaseTransformRunnerSystem {
         address account,
         uint256 parentId
     ) internal view returns (bool) {
-        // The CountingSystem entity is Bounty ID and key is User Wallet
-        if (
-            CountingSystem(_gameRegistry.getSystem(COUNTING_SYSTEM_ID))
-                .getCount(parentId, EntityLibrary.addressToEntity(account)) > 0
-        ) {
+        // Check if user has a pending bounty for this Bounty type
+        CounterComponent counterComponent = CounterComponent(
+            _gameRegistry.getComponent(COUNTER_COMPONENT_ID)
+        );
+        uint256 bountyParentTransformId = EntityLibrary.accountSubEntity(
+            account,
+            parentId
+        );
+        if (counterComponent.has(bountyParentTransformId)) {
             return true;
         }
         return false;

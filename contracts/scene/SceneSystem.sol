@@ -21,6 +21,10 @@ import {GeneratorSceneObjectSystem, ID as GENERATOR_SCENE_OBJECT_SYSTEM_ID} from
 import {IShipWrightSystem, ID as SHIPWRIGHT_SYSTEM_ID} from "./IShipWrightSystem.sol";
 import {ShipWrightPlacedComponent, ID as SHIPWRIGHT_PLACED_COMPONENT_ID} from "../generated/components/ShipWrightPlacedComponent.sol";
 import {ShipWrightComponent, ID as SHIPWRIGHT_COMPONENT_ID} from "../generated/components/ShipWrightComponent.sol";
+import {PendingIslandTransformListComponent, Layout as PendingIslandTransformListComponentLayout, ID as PENDING_ISLAND_TRANSFORM_LIST_COMPONENT_ID} from "../generated/components/PendingIslandTransformListComponent.sol";
+import {CraftingSlotsGrantedComponent, ID as CRAFTING_SLOTS_GRANTED_COMPONENT_ID} from "../generated/components/CraftingSlotsGrantedComponent.sol";
+import {CounterComponent, Layout as CounterComponentLayout, ID as COUNTER_COMPONENT_ID} from "../generated/components/CounterComponent.sol";
+import {EntityBaseComponent, ID as ENTITY_BASE_COMPONENT_ID} from "../generated/components/EntityBaseComponent.sol";
 
 uint256 constant ID = uint256(keccak256("game.piratenation.scenesystem"));
 
@@ -46,11 +50,14 @@ abstract contract SceneSystem is OwnerSystem, ISceneSystem {
     /// @notice Invalid item instance cannot be added to the scene
     error InvalidItemInstance(uint256 instanceEntity);
 
-    /// @notice Invalid owner for operation
-    error NotOwner(address account);
-
     /// @notice Account is still in cooldown
     error AccountStillInCooldown();
+
+    /// @notice Pending crafting building transforms exist
+    error PendingCraftingTransformsExist();
+
+    /// @notice Crafting building already exists on island
+    error CraftingBuildingAlreadyExists();
 
     /**
      * @inheritdoc ISceneSystem
@@ -204,6 +211,35 @@ abstract contract SceneSystem is OwnerSystem, ISceneSystem {
                 account,
                 sceneEntity
             );
+            // Check if object is a crafting building and enforce only one type per island
+            if (
+                CraftingSlotsGrantedComponent(
+                    _gameRegistry.getComponent(
+                        CRAFTING_SLOTS_GRANTED_COMPONENT_ID
+                    )
+                ).has(objectParams.objectEntity)
+            ) {
+                CounterComponent counterComponent = CounterComponent(
+                    _gameRegistry.getComponent(COUNTER_COMPONENT_ID)
+                );
+                // Pack the account and the EntityBase into a unique ID
+                uint256 walletBuildingEntityId = uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            account,
+                            EntityBaseComponent(
+                                _gameRegistry.getComponent(
+                                    ENTITY_BASE_COMPONENT_ID
+                                )
+                            ).getValue(objectParams.objectEntity)
+                        )
+                    )
+                );
+                if (counterComponent.has(walletBuildingEntityId)) {
+                    revert CraftingBuildingAlreadyExists();
+                }
+                counterComponent.setValue(walletBuildingEntityId, 1);
+            }
         }
     }
 
@@ -238,6 +274,39 @@ abstract contract SceneSystem is OwnerSystem, ISceneSystem {
             ShipWrightPlacedComponent(
                 _gameRegistry.getComponent(SHIPWRIGHT_PLACED_COMPONENT_ID)
             ).remove(instanceEntity);
+        }
+        // Enforce crafting building cannot be removed if it has pending transforms
+        if (
+            PendingIslandTransformListComponent(
+                _gameRegistry.getComponent(
+                    PENDING_ISLAND_TRANSFORM_LIST_COMPONENT_ID
+                )
+            ).getLayoutValue(instanceEntity).value.length > 0
+        ) {
+            revert PendingCraftingTransformsExist();
+        }
+
+        // Check if object is a crafting building and remove counter
+        if (
+            CraftingSlotsGrantedComponent(
+                _gameRegistry.getComponent(CRAFTING_SLOTS_GRANTED_COMPONENT_ID)
+            ).has(gameItemEntity)
+        ) {
+            CounterComponent(_gameRegistry.getComponent(COUNTER_COMPONENT_ID))
+                .remove(
+                    uint256(
+                        keccak256(
+                            abi.encodePacked(
+                                account,
+                                EntityBaseComponent(
+                                    _gameRegistry.getComponent(
+                                        ENTITY_BASE_COMPONENT_ID
+                                    )
+                                ).getValue(gameItemEntity)
+                            )
+                        )
+                    )
+                );
         }
 
         // Remove the instance from the scene
@@ -338,13 +407,9 @@ abstract contract SceneSystem is OwnerSystem, ISceneSystem {
      * @param account Account of the player
      */
     function _validateCooldown(address account) internal {
-
         uint32 scenePlacementCooldownLimit = uint32(
-            Uint256Component(
-            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
-        ).getValue(
-                SCENE_PLACEMENT_COOLDOWN_SECS
-            )
+            Uint256Component(_gameRegistry.getComponent(UINT256_COMPONENT_ID))
+                .getValue(SCENE_PLACEMENT_COOLDOWN_SECS)
         );
 
         // Apply cooldown on account, revert if still in cooldown

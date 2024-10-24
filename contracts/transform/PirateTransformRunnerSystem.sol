@@ -70,7 +70,7 @@ contract PirateTransformRunnerSystem is BaseTransformRunnerSystem {
         external
         override
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
-        returns (bool needsVrf)
+        returns (bool needsVrf, bool skipTransformInstance)
     {
         uint256 transformEntity = params.transformEntity;
 
@@ -99,6 +99,7 @@ contract PirateTransformRunnerSystem is BaseTransformRunnerSystem {
 
         // Set needsVRF flag
         needsVrf = _needsVrf(runnerConfig);
+        return (needsVrf, skipTransformInstance);
     }
 
     /**

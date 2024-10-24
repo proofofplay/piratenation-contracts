@@ -57,6 +57,12 @@ error SkusMustBeInOrder();
 // @notice Emitted when is not purchaseable because Auction
 error MustBePurchasedByAuction();
 
+// @notice Stake-only purchase
+error MustBePurchasedByStake();
+
+// @notice Max Purchases Exceeded
+error MaxPurchasesExceeded();
+
 /**
  * The Pirate Token shop is a contract that allows users to purchase items using an ERC20 token.
  */
@@ -99,6 +105,10 @@ contract PirateTokenShop is
         uint32 quantity;
         // @notice If the SKU is unlimited, it can be purchased as many times as desired
         bool unlimited;
+        // @notice If the SKU is a stake-only purchase
+        bool stakeOnly;
+        // @notice Max purchases per wallet allowed for this SKU
+        uint32 maxPurchaseByAccount;
     }
 
     // @notice The mapping of SKU entities to their Sku struct
@@ -109,6 +119,10 @@ contract PirateTokenShop is
 
     // @notice the address of the public auction contract
     address public auctionContract;
+
+    // @notice The mapping of user addresses to sku id to their purchase count
+    mapping(address => mapping(uint256 => uint256))
+        public userToSkuIdToPurchaseCount;
 
     // @notice Emitted when a purchase is made
     event Purchase(
@@ -188,26 +202,18 @@ contract PirateTokenShop is
     /**
      * @dev Set the SKUs in the shop
      * @param skuEntities The array of SKU entities
-     * @param price The array of prices for each SKU
-     * @param quantities The array of quantities for each SKU
-     * @param unlimited The array of booleans for each SKU to determine the SKU is unlimited
+     * @param skuValues The array of Sku values
      */
     function setSkus(
         uint256[] calldata skuEntities,
-        uint256[] calldata price,
-        uint32[] calldata quantities,
-        bool[] calldata unlimited
+        Sku[] calldata skuValues
     ) external onlyRole(LISTINGS_ROLE) {
-        if (
-            skuEntities.length != price.length ||
-            skuEntities.length != quantities.length ||
-            skuEntities.length != unlimited.length
-        ) {
+        if (skuEntities.length != skuValues.length) {
             revert InvalidInputs();
         }
 
         for (uint256 i = 0; i < skuEntities.length; i++) {
-            skus[skuEntities[i]] = Sku(price[i], quantities[i], unlimited[i]);
+            skus[skuEntities[i]] = skuValues[i];
             //auctionable[skuEntities[i]] = isAuction[i];
         }
     }
@@ -290,7 +296,14 @@ contract PirateTokenShop is
             revert InvalidStakeContract();
         }
 
-        return _purchase(purchaser, skuEntities, quantities, stakingDiscount);
+        return
+            _purchase(
+                purchaser,
+                skuEntities,
+                quantities,
+                stakingDiscount,
+                true
+            );
     }
 
     /**
@@ -309,7 +322,7 @@ contract PirateTokenShop is
         uint256[] calldata skuEntities,
         uint256[] calldata quantities
     ) external whenNotPaused returns (uint256, uint256) {
-        return _purchase(_msgSender(), skuEntities, quantities, 0);
+        return _purchase(_msgSender(), skuEntities, quantities, 0, false);
     }
 
     /**
@@ -348,7 +361,7 @@ contract PirateTokenShop is
             s
         );
 
-        return _purchase(_msgSender(), skuEntities, quantities, 0);
+        return _purchase(_msgSender(), skuEntities, quantities, 0, false);
     }
 
     // internal
@@ -356,7 +369,8 @@ contract PirateTokenShop is
         address purchaser,
         uint256[] calldata skuEntities,
         uint256[] calldata quantities,
-        uint256 discount
+        uint256 discount,
+        bool stakeOnlyPurchase
     ) internal returns (uint256, uint256) {
         if (
             skuEntities.length == 0 || skuEntities.length != quantities.length
@@ -365,12 +379,14 @@ contract PirateTokenShop is
         }
 
         uint256 total = 0;
-        uint256 totalQuantity = 0;
         purchaseId++;
 
         for (uint256 i = 0; i < skuEntities.length; i++) {
             if (i > 0 && skuEntities[i] <= skuEntities[i - 1]) {
                 revert SkusMustBeInOrder();
+            }
+            if (quantities[i] == 0) {
+                revert InvalidInputs();
             }
 
             // if (auctionable[skuEntities[i]]) {
@@ -378,25 +394,34 @@ contract PirateTokenShop is
             // }
 
             Sku storage sku = skus[skuEntities[i]];
-            totalQuantity += quantities[i];
-            uint256 purchaseQuantity = quantities[i];
+            // Enforce stakeOnly purchases
+            if (sku.stakeOnly == true && stakeOnlyPurchase == false) {
+                revert MustBePurchasedByStake();
+            }
             // If listing is marked as unlimited, we can purchase as many as we want
             // Otherwise, we need to check if we have enough quantity to purchase
             if (!sku.unlimited) {
-                if (purchaseQuantity > sku.quantity) {
+                if (quantities[i] > sku.quantity) {
                     revert ItemSoldOut();
                 }
-                if (purchaseQuantity > itemsLimit) {
+                if (quantities[i] > itemsLimit) {
                     revert MaxItemsExceeded();
                 }
                 // Reduce quantity of Sku
-                sku.quantity = sku.quantity - uint32(purchaseQuantity);
+                sku.quantity = sku.quantity - uint32(quantities[i]);
+                // Enforce max purchases per wallet allowed and increment purchase count
+                if (
+                    userToSkuIdToPurchaseCount[purchaser][skuEntities[i]] +
+                        quantities[i] >
+                    sku.maxPurchaseByAccount
+                ) {
+                    revert MaxPurchasesExceeded();
+                }
+                userToSkuIdToPurchaseCount[purchaser][
+                    skuEntities[i]
+                ] += quantities[i];
             }
-            total += sku.price * purchaseQuantity;
-        }
-
-        if (totalQuantity == 0) {
-            revert InvalidInputs();
+            total += sku.price * quantities[i];
         }
 
         //apply price index

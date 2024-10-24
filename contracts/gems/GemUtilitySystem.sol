@@ -11,17 +11,15 @@ import {TransformParams} from "../transform/ITransformRunnerSystem.sol";
 import {TransformInstanceComponent, Layout as TransformInstanceComponentLayout, ID as TRANSFORM_INSTANCE_COMPONENT_ID} from "../generated/components/TransformInstanceComponent.sol";
 import {TransformInputComponent, Layout as TransformInputComponentLayout, ID as TRANSFORM_INPUT_COMPONENT_ID} from "../generated/components/TransformInputComponent.sol";
 import {GemResourceCostComponent, Layout as GemsResourceCostComponentLayout, ID as GEM_RESOURCE_COST_COMPONENT_ID} from "../generated/components/GemResourceCostComponent.sol";
-import {GemTransformEligibleComponent, Layout as GemTransformEligibleComponentLayout, ID as GEM_TRANSFORM_ELIGIBLE_COMPONENT_ID} from "../generated/components/GemTransformEligibleComponent.sol";
+import {GemTransformEligibleComponent, ID as GEM_TRANSFORM_ELIGIBLE_COMPONENT_ID} from "../generated/components/GemTransformEligibleComponent.sol";
 import {DefaultTransformRunnerConfigComponent, Layout as DefaultTransformRunnerConfigComponentLayout, ID as DEFAULT_TRANSFORM_RUNNER_CONFIG_COMPONENT_ID} from "../generated/components/DefaultTransformRunnerConfigComponent.sol";
-import {BountyTransformConfigComponent, Layout as BountyTransformConfigComponentLayout, ID as BOUNTY_TRANSFORM_CONFIG_COMPONENT_ID} from "../generated/components/BountyTransformConfigComponent.sol";
 import {TransformAccountDataComponent, Layout as TransformAccountDataComponentLayout, ID as TRANSFORM_ACCOUNT_DATA_COMPONENT_ID} from "../generated/components/TransformAccountDataComponent.sol";
-import {PirateTransformRunnerConfigComponent, Layout as PirateTransformRunnerConfigComponentLayout, ID as PIRATE_QUEST_RUNNER_CONFIG_COMPONENT_ID} from "../generated/components/PirateTransformRunnerConfigComponent.sol";
 import {StaticEntityListComponent, ID as STATIC_ENTITY_LIST_COMPONENT_ID} from "../generated/components/StaticEntityListComponent.sol";
-import {ParentComponent, ID as PARENT_COMPONENT_ID} from "../generated/components/ParentComponent.sol";
 import {RangeComponent, Layout as RangeComponentLayout, ID as RANGE_COMPONENT_ID} from "../generated/components/RangeComponent.sol";
 import {GemFormulaComponent, Layout as GemFormulaComponentLayout, ID as GEM_FORMULA_COMPONENT_ID} from "../generated/components/GemFormulaComponent.sol";
-import {GemCostMultiplierComponent, Layout as GemCostMultiplierComponentLayout, ID as GEM_COST_MULTIPLIER_COMPONENT_ID} from "../generated/components/GemCostMultiplierComponent.sol";
-import {GemTransformCooldownEligibleComponent, Layout as GemTransformCooldownEligibleComponentLayout, ID as GEM_TRANSFORM_COOLDOWN_ELIGIBLE_COMPONENT_ID} from "../generated/components/GemTransformCooldownEligibleComponent.sol";
+import {GemCostMultiplierComponent, ID as GEM_COST_MULTIPLIER_COMPONENT_ID} from "../generated/components/GemCostMultiplierComponent.sol";
+import {GemTransformCooldownEligibleComponent, ID as GEM_TRANSFORM_COOLDOWN_ELIGIBLE_COMPONENT_ID} from "../generated/components/GemTransformCooldownEligibleComponent.sol";
+import {TransformConfigTimeLockComponent, Layout as TransformConfigTimeLockComponentLayout, ID as TRANSFORM_CONFIG_TIME_LOCK_COMPONENT_ID} from "../generated/components/TransformConfigTimeLockComponent.sol";
 
 import {GameItems, ID as GAME_ITEMS_ID} from "../tokens/gameitems/GameItems.sol";
 import {IGameCurrency} from "../tokens/IGameCurrency.sol";
@@ -29,7 +27,6 @@ import {ID as GOLD_TOKEN_STRATEGY_ID} from "../tokens/goldtoken/GoldTokenStrateg
 import {ILootSystemV2, ID as LOOT_SYSTEM_ID} from "../loot/ILootSystemV2.sol";
 import {ID as TRANSFORM_SYSTEM_ID} from "../transform/ITransformSystem.sol";
 import {TransformSystem} from "../transform/TransformSystem.sol";
-import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
 
 uint256 constant GEM_TOKEN_ID = 335;
 
@@ -54,8 +51,8 @@ contract GemUtilitySystem is
     /// @notice Cannot remove cooldown
     error CannotRemoveCooldown();
 
-    /// @notice No resource cost available
-    error ResourceCostNotAvailable(uint256 resourceId);
+    /// @notice No cooldown found
+    error NoCooldownFound();
 
     /// @notice Error thrown when a user is not owner of the entity
     error NotOwner();
@@ -71,6 +68,9 @@ contract GemUtilitySystem is
         uint256 expectedGemCost,
         uint256 calculatedGemCost
     );
+
+    /// @notice No timelock config available
+    error NoTimeLockConfig();
 
     /**
      * Initializer for this upgradeable contract
@@ -92,7 +92,6 @@ contract GemUtilitySystem is
         uint256 expectedGemCost
     ) external override whenNotPaused nonReentrant returns (uint256) {
         address caller = _getPlayerAccount(_msgSender());
-        // Check if the transform is eligible for gem usage
         if (
             GemTransformEligibleComponent(
                 _gameRegistry.getComponent(GEM_TRANSFORM_ELIGIBLE_COMPONENT_ID)
@@ -127,7 +126,6 @@ contract GemUtilitySystem is
         if (gemCost > expectedGemCost) {
             revert ExpectedCostMismatch(expectedGemCost, gemCost);
         }
-        // Burn the gems from the user
         GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID)).burn(
             caller,
             GEM_TOKEN_ID,
@@ -139,11 +137,11 @@ contract GemUtilitySystem is
     }
 
     /**
-     * @dev Complete a transform, primarily used for bounty completion
+     * @dev Complete a transform, primarily used for bounty and timed craft completions
+     * @dev Used for individual transform instances
      * @param transformInstanceEntity The transform instance entity to complete
      * @param expectedGemCost Expected gem cost for the transform
      */
-    /**
     function gemCompleteTransform(
         uint256 transformInstanceEntity,
         uint256 expectedGemCost
@@ -155,10 +153,6 @@ contract GemUtilitySystem is
         TransformInstanceComponentLayout
             memory transformInstance = transformInstanceComponent
                 .getLayoutValue(transformInstanceEntity);
-        if (caller != transformInstance.account) {
-            revert NotOwner();
-        }
-        // Check if the transform is eligible for gem usage
         if (
             GemTransformEligibleComponent(
                 _gameRegistry.getComponent(GEM_TRANSFORM_ELIGIBLE_COMPONENT_ID)
@@ -166,16 +160,32 @@ contract GemUtilitySystem is
         ) {
             revert NotAvailable();
         }
-        BountyTransformConfigComponentLayout
-            memory runnerConfig = BountyTransformConfigComponent(
-                _gameRegistry.getComponent(BOUNTY_TRANSFORM_CONFIG_COMPONENT_ID)
-            ).getLayoutValue(transformInstance.transformEntity);
-
+        if (caller != transformInstance.account) {
+            revert NotOwner();
+        }
+        TransformConfigTimeLockComponent timeLockConfigComponent = TransformConfigTimeLockComponent(
+                _gameRegistry.getComponent(
+                    TRANSFORM_CONFIG_TIME_LOCK_COMPONENT_ID
+                )
+            );
+        if (!timeLockConfigComponent.has(transformInstance.transformEntity)) {
+            revert NoTimeLockConfig();
+        }
+        TransformConfigTimeLockComponentLayout
+            memory timeLockConfig = timeLockConfigComponent.getLayoutValue(
+                transformInstance.transformEntity
+            );
+        // Prevent user from wasting gems if cooldown has passed
+        if (
+            block.timestamp >=
+            transformInstance.startTime + timeLockConfig.value
+        ) {
+            revert CannotRemoveCooldown();
+        }
         uint256 timeRemaining = transformInstance.startTime +
-            runnerConfig.timeLock -
+            timeLockConfig.value -
             block.timestamp;
         if (timeRemaining > 0) {
-            // Handle gem cost
             uint256 gemCost = _convertSecondsToGemCost(
                 timeRemaining,
                 GemCostMultiplierComponent(
@@ -191,7 +201,6 @@ contract GemUtilitySystem is
             if (gemCost > expectedGemCost) {
                 revert ExpectedCostMismatch(expectedGemCost, gemCost);
             }
-            // Burn gems
             GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID)).burn(
                 caller,
                 GEM_TOKEN_ID,
@@ -203,21 +212,14 @@ contract GemUtilitySystem is
                 transformInstanceEntity,
                 transformInstance
             );
-            uint256 parentEntity = ParentComponent(
-                _gameRegistry.getComponent(PARENT_COMPONENT_ID)
-            ).getValue(transformInstance.transformEntity);
-            ICooldownSystem(_getSystem(COOLDOWN_SYSTEM_ID)).deleteCooldown(
-                EntityLibrary.addressToEntity(caller),
-                parentEntity
-            );
         }
         TransformSystem(_getSystem(TRANSFORM_SYSTEM_ID))
             .completeTransformWithAccount(transformInstanceEntity, caller);
     }
-     */
 
     /**
-     * @dev Remove only the cooldown on a transform, primarily used for quest cooldowns
+     * @dev Remove only the cooldown on a users transform, primarily used for quest cooldowns
+     * @dev Not to use for individual transform instances
      * @param transformEntity The transform entity to remove the cooldown from
      * @param expectedGemCost Expected gem cost for the cooldown removal
      */
@@ -333,15 +335,21 @@ contract GemUtilitySystem is
                     DEFAULT_TRANSFORM_RUNNER_CONFIG_COMPONENT_ID
                 )
             ).getLayoutValue(transformEntity);
-        // Calculate time remaining
+        if (runnerConfig.cooldownSeconds == 0) {
+            revert NoCooldownFound();
+        }
+        if (
+            block.timestamp >=
+            accountTransformData.lastCompletionTime +
+                runnerConfig.cooldownSeconds
+        ) {
+            revert CannotRemoveCooldown();
+        }
+        // Calculate time remaining : will arithmetic revert if block.timestamp > lastCompletionTime + cooldownSeconds
         timeRemaining =
             accountTransformData.lastCompletionTime +
             runnerConfig.cooldownSeconds -
             block.timestamp;
-        // Prevent user from wasting gems if cooldown has passed
-        if (timeRemaining == 0) {
-            revert CannotRemoveCooldown();
-        }
         // Set the last completion time to zero to indicate the cooldown has been completed
         accountTransformData.lastCompletionTime = 0;
         transformAccountDataComponent.setLayoutValue(

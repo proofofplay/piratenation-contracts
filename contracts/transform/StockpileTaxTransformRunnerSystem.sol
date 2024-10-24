@@ -47,7 +47,7 @@ contract StockpileTaxTransformRunnerSystem is BaseTransformRunnerSystem {
         external
         override
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
-        returns (bool needsVrf)
+        returns (bool needsVrf, bool skipTransformInstance)
     {
         uint256 transformEntity = params.transformEntity;
         address account = transformInstance.account;
@@ -119,7 +119,7 @@ contract StockpileTaxTransformRunnerSystem is BaseTransformRunnerSystem {
             currentStockpileCraftCount
         );
 
-        return false;
+        return (needsVrf, skipTransformInstance);
     }
 
     function completeTransform(

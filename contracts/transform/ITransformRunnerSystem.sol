@@ -26,12 +26,13 @@ interface ITransformRunnerSystem {
      * @param params Transform parameters
      *
      * @return needsVrf Whether or not the transform needs vrf to complete
+     * @return skipTransformInstance Whether or not the transform instance should be skipped
      */
     function startTransform(
         TransformInstanceComponentLayout memory transformInstance,
         uint256 transformInstanceEntity,
         TransformParams calldata params
-    ) external returns (bool needsVrf);
+    ) external returns (bool needsVrf, bool skipTransformInstance);
 
     /**
      * Complete a transform for the given account

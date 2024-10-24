@@ -56,10 +56,11 @@ contract DefaultTransformRunnerSystem is BaseTransformRunnerSystem {
         view
         override
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
-        returns (bool needsVrf)
+        returns (bool needsVrf, bool skipTransformInstance)
     {
         // Set needVRF flag
         needsVrf = _needsVrf(params.transformEntity);
+        return (needsVrf, skipTransformInstance);
     }
 
     /**

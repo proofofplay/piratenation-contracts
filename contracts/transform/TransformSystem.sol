@@ -376,15 +376,22 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
 
         // Allow runner to run its checks, revert if necessary, and start the transform
         bool needsVrf;
+        bool skipTransformInstance;
 
         for (uint256 idx; idx < transformRunners.length; ++idx) {
-            needsVrf =
-                transformRunners[idx].startTransform(
+            bool _needsVrf;
+            bool _skipTransformInstance;
+            (_needsVrf, _skipTransformInstance) = transformRunners[idx]
+                .startTransform(
                     transformInstance,
                     transformInstanceEntity,
                     params
-                ) ||
-                needsVrf;
+                );
+            // Ensure that values are not overwritten
+            needsVrf = needsVrf || _needsVrf;
+            skipTransformInstance =
+                skipTransformInstance ||
+                _skipTransformInstance;
         }
 
         transformInstance.needsVrf = needsVrf;
@@ -440,9 +447,11 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
             );
         } else {
             // If the transform isn't immediately completable we should save it here
-            TransformInstanceComponent(
-                _gameRegistry.getComponent(TRANSFORM_INSTANCE_COMPONENT_ID)
-            ).setLayoutValue(transformInstanceEntity, transformInstance);
+            if (skipTransformInstance == false) {
+                TransformInstanceComponent(
+                    _gameRegistry.getComponent(TRANSFORM_INSTANCE_COMPONENT_ID)
+                ).setLayoutValue(transformInstanceEntity, transformInstance);
+            }
         }
 
         return transformInstanceEntity;
@@ -732,15 +741,19 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
                 );
             }
 
-            if (_gameRegistry.getEntityHasComponent(transformEntity, ACCOUNT_SKILLS_XP_GRANTED_ID)) {
-                IAccountXpSystem(
-                    _gameRegistry.getSystem(ACCOUNT_XP_SYSTEM_ID)
-                ).grantAccountSkillsXp(
-                    accountEntity,
+            if (
+                _gameRegistry.getEntityHasComponent(
                     transformEntity,
-                    numSuccess,
-                    numFailures
-                );
+                    ACCOUNT_SKILLS_XP_GRANTED_ID
+                )
+            ) {
+                IAccountXpSystem(_gameRegistry.getSystem(ACCOUNT_XP_SYSTEM_ID))
+                    .grantAccountSkillsXp(
+                        accountEntity,
+                        transformEntity,
+                        numSuccess,
+                        numFailures
+                    );
             }
 
             // Update account and transform instance
@@ -843,11 +856,19 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
             }
         }
 
-        if (_gameRegistry.getEntityHasComponent(transformEntity, ACCOUNT_SKILL_REQUIREMENTS_ID)) {
-            if (!IAccountXpSystem(_gameRegistry.getSystem(ACCOUNT_XP_SYSTEM_ID)).hasRequiredSkills(
-                EntityLibrary.addressToEntity(account),
-                transformEntity
-            )) {
+        if (
+            _gameRegistry.getEntityHasComponent(
+                transformEntity,
+                ACCOUNT_SKILL_REQUIREMENTS_ID
+            )
+        ) {
+            if (
+                !IAccountXpSystem(_gameRegistry.getSystem(ACCOUNT_XP_SYSTEM_ID))
+                    .hasRequiredSkills(
+                        EntityLibrary.addressToEntity(account),
+                        transformEntity
+                    )
+            ) {
                 return false;
             }
         }
