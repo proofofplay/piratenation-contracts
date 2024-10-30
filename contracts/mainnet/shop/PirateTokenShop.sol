@@ -63,12 +63,6 @@ error MustBePurchasedByStake();
 // @notice Max Purchases Exceeded
 error MaxPurchasesExceeded();
 
-// @notice ExpiredListing
-error ExpiredListing();
-
-// @notice SKU not started yet
-error NotStartedYet();
-
 /**
  * The Pirate Token shop is a contract that allows users to purchase items using an ERC20 token.
  */
@@ -115,10 +109,6 @@ contract PirateTokenShop is
         bool stakeOnly;
         // @notice Max purchases per wallet allowed for this SKU
         uint32 maxPurchaseByAccount;
-        // @notice start time of the SKU list
-        uint32 startTime;
-        // @notice end time of the SKU list
-        uint32 endTime;
     }
 
     // @notice The mapping of SKU entities to their Sku struct
@@ -288,120 +278,6 @@ contract PirateTokenShop is
         }
     }
 
-    /** INDIVIDUAL SKU HELPERS */
-
-    /**
-     * @dev Update the time related data fields for SKUs
-     * @param skuEntities The array of SKU entities
-     * @param startTimes The array of start times for each SKU
-     * @param endTimes The array of end times for each SKU
-     */
-    function updateSkuTimeData(
-        uint256[] calldata skuEntities,
-        uint32[] calldata startTimes,
-        uint32[] calldata endTimes
-    ) external onlyRole(LISTINGS_ROLE) {
-        if (
-            skuEntities.length != startTimes.length ||
-            skuEntities.length != endTimes.length
-        ) {
-            revert InvalidInputs();
-        }
-
-        for (uint256 i = 0; i < skuEntities.length; i++) {
-            Sku storage sku = skus[skuEntities[i]];
-            sku.startTime = startTimes[i];
-            sku.endTime = endTimes[i];
-        }
-    }
-
-    /**
-     * @dev Update the price of the SKUs
-     * @param skuEntities The array of SKU entities
-     * @param prices The array of prices for each SKU
-     */
-    function updateSkuPrice(
-        uint256[] calldata skuEntities,
-        uint256[] calldata prices
-    ) external onlyRole(LISTINGS_ROLE) {
-        if (skuEntities.length != prices.length) {
-            revert InvalidInputs();
-        }
-
-        for (uint256 i = 0; i < skuEntities.length; i++) {
-            Sku storage sku = skus[skuEntities[i]];
-            sku.price = prices[i];
-        }
-    }
-
-    /**
-     * @dev Update the quantity of the SKUs
-     * @param skuEntities The array of SKU entities
-     * @param quantities The array of quantities for each SKU
-     * @param reduceExistingSupply The array of whether to reduce the existing supply or set the quantity as the new quantity
-     */
-    function updateSkuQuantity(
-        uint256[] calldata skuEntities,
-        uint32[] calldata quantities,
-        bool[] calldata reduceExistingSupply
-    ) external onlyRole(LISTINGS_ROLE) {
-        if (
-            skuEntities.length != quantities.length ||
-            skuEntities.length != reduceExistingSupply.length
-        ) {
-            revert InvalidInputs();
-        }
-
-        for (uint256 i = 0; i < skuEntities.length; i++) {
-            Sku storage sku = skus[skuEntities[i]];
-            if (reduceExistingSupply[i]) {
-                sku.quantity = sku.quantity - quantities[i];
-            } else {
-                sku.quantity = quantities[i];
-            }
-        }
-    }
-
-    /**
-     * @dev Update the max purchase by account for the SKUs
-     * @param skuEntities The array of SKU entities
-     * @param maxPurchaseByAccount The array of max purchases by account for each SKU
-     */
-    function updateMaxPurchaseByAccount(
-        uint256[] calldata skuEntities,
-        uint32[] calldata maxPurchaseByAccount
-    ) external onlyRole(LISTINGS_ROLE) {
-        if (skuEntities.length != maxPurchaseByAccount.length) {
-            revert InvalidInputs();
-        }
-
-        for (uint256 i = 0; i < skuEntities.length; i++) {
-            Sku storage sku = skus[skuEntities[i]];
-            sku.maxPurchaseByAccount = maxPurchaseByAccount[i];
-        }
-    }
-
-    /**
-     * @dev Update the stake only status for the SKUs
-     * @param skuEntities The array of SKU entities
-     * @param stakeOnly The array of stake only status for each SKU
-     */
-    function updateSkuStakeOnly(
-        uint256[] calldata skuEntities,
-        bool[] calldata stakeOnly
-    ) external onlyRole(LISTINGS_ROLE) {
-        if (skuEntities.length != stakeOnly.length) {
-            revert InvalidInputs();
-        }
-
-        for (uint256 i = 0; i < skuEntities.length; i++) {
-            Sku storage sku = skus[skuEntities[i]];
-            sku.stakeOnly = stakeOnly[i];
-        }
-    }
-
-    /** PURCHASE FUNCTIONS */
-
     /**
      * @dev Purchase from the stake contract
      * @param purchaser The address of the purchaser
@@ -488,8 +364,7 @@ contract PirateTokenShop is
         return _purchase(_msgSender(), skuEntities, quantities, 0, false);
     }
 
-    /** INTERNAL */
-
+    // internal
     function _purchase(
         address purchaser,
         uint256[] calldata skuEntities,
@@ -519,14 +394,6 @@ contract PirateTokenShop is
             // }
 
             Sku storage sku = skus[skuEntities[i]];
-            // Enforce start time if needed
-            if (sku.startTime > 0 && block.timestamp < sku.startTime) {
-                revert NotStartedYet();
-            }
-            // Enforce end time if needed
-            if (sku.endTime > 0 && block.timestamp > sku.endTime) {
-                revert ExpiredListing();
-            }
             // Enforce stakeOnly purchases
             if (sku.stakeOnly == true && stakeOnlyPurchase == false) {
                 revert MustBePurchasedByStake();
