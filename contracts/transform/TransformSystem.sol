@@ -115,6 +115,9 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     /// @notice Zero param count
     error ZeroParamCount();
 
+    /// @notice Empty Transform Array
+    error EmptyTransformArray();
+
     /** PUBLIC **/
 
     /**
@@ -223,32 +226,28 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     function completeTransform(
         uint256 transformInstanceEntity
     ) public nonReentrant whenNotPaused {
-        TransformInstanceComponentLayout
-            memory transformInstance = _getTransformInstance(
-                transformInstanceEntity
-            );
-
         address account = _getPlayerAccount(_msgSender());
 
-        // Make sure current account is the owner of the transform instance
-        if (account != transformInstance.account) {
-            revert CallerNotOwner(account, transformInstance.account);
+        _validateAndCompleteTransformInstance(account, transformInstanceEntity);
+    }
+
+    /**
+     * Completes a batch of transform instances
+     * @param transformInstanceEntities Entities of the transform instances to complete
+     */
+    function batchCompleteTransform(
+        uint256[] memory transformInstanceEntities
+    ) public nonReentrant whenNotPaused onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
+        if (transformInstanceEntities.length == 0) {
+            revert EmptyTransformArray();
         }
-
-        ITransformRunnerSystem[] memory transformRunners = _getTransformRunners(
-            transformInstance.transformEntity
-        );
-
-        if (!_isCompleteable(account, transformRunners, transformInstance)) {
-            revert TransformNotCompleteable(transformInstanceEntity);
+        address account = _getPlayerAccount(_msgSender());
+        for (uint256 idx; idx < transformInstanceEntities.length; ++idx) {
+            _validateAndCompleteTransformInstance(
+                account,
+                transformInstanceEntities[idx]
+            );
         }
-
-        _completeTransform(
-            account,
-            transformRunners,
-            transformInstance,
-            transformInstanceEntity
-        );
     }
 
     /**
@@ -545,6 +544,39 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
                 transformInstanceEntity: transformInstanceEntity
             });
         }
+    }
+
+    /**
+     * Validates and completes a transform instance
+     */
+    function _validateAndCompleteTransformInstance(
+        address account,
+        uint256 transformInstanceEntity
+    ) internal {
+        TransformInstanceComponentLayout
+            memory transformInstance = _getTransformInstance(
+                transformInstanceEntity
+            );
+
+        // Make sure current account is the owner of the transform instance
+        if (account != transformInstance.account) {
+            revert CallerNotOwner(account, transformInstance.account);
+        }
+
+        ITransformRunnerSystem[] memory transformRunners = _getTransformRunners(
+            transformInstance.transformEntity
+        );
+
+        if (!_isCompleteable(account, transformRunners, transformInstance)) {
+            revert TransformNotCompleteable(transformInstanceEntity);
+        }
+
+        _completeTransform(
+            account,
+            transformRunners,
+            transformInstance,
+            transformInstanceEntity
+        );
     }
 
     /**
