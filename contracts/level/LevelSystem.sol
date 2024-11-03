@@ -15,6 +15,8 @@ import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
 import {IsPirateComponent, ID as IS_PIRATE_COMPONENT_ID} from "../generated/components/IsPirateComponent.sol";
 import {XpComponent, ID as XP_COMPONENT_ID} from "../generated/components/XpComponent.sol";
+import {LootEntityArrayComponent, Layout as LootEntityArrayComponentLayout, ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
+import {IGameItems} from "../tokens/gameitems/IGameItems.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
 
@@ -33,6 +35,9 @@ uint256 constant MAX_XP_ID = uint256(
 );
 uint256 constant MAX_LEVEL_ID = uint256(
     keccak256("game.piratenation.global.max_level")
+);
+uint256 constant LOOT_PER_LEVEL_UPGRADE_ARRAY = uint256(
+    keccak256("game.piratenation.global.loot_per_level_upgrade_array")
 );
 
 /// @title LevelSystem
@@ -144,6 +149,24 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
                 entityId,
                 desiredLevel
             );
+        LootEntityArrayComponentLayout
+            memory lootData = LootEntityArrayComponent(
+                _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID)
+            ).getLayoutValue(LOOT_PER_LEVEL_UPGRADE_ARRAY);
+        if (lootData.lootType.length > 0) {
+            address inputTokenContract;
+            uint256 inputLootId;
+            for (uint256 idx = currentLevel + 1; idx <= desiredLevel; ++idx) {
+                (inputTokenContract, inputLootId) = EntityLibrary.entityToToken(
+                    lootData.lootEntity[idx]
+                );
+                IGameItems(inputTokenContract).mint(
+                    account,
+                    inputLootId,
+                    lootData.amount[idx]
+                );
+            }
+        }
 
         // Emit event
         emit UpgradePirateLevel(nftContract, nftTokenId, desiredLevel);
