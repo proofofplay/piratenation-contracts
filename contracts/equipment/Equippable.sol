@@ -8,9 +8,10 @@ import {ID as GAME_ITEMS_ID} from "../tokens/gameitems/IGameItems.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {Item, IEquippable} from "./IEquippable.sol";
 import {ItemsEquippedComponent, ID as ITEMS_EQUIPPED_COMPONENT_ID} from "../generated/components/ItemsEquippedComponent.sol";
-import {ItemSlotsComponent, Layout as ItemSlotsComponentLayout, ID as ITEM_SLOTS_COMPONENT_ID} from "../generated/components/ItemSlotsComponent.sol";
+import {ItemSlotsPerLevelComponent, Layout as ItemSlotsPerLevelComponentLayout, ID as ITEM_SLOTS_PER_LEVEL_COMPONENT_ID} from "../generated/components/ItemSlotsPerLevelComponent.sol";
 import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
 import {CombatModifiersComponent, ID as COMBAT_MODIFIERS_COMPONENT_ID} from "../generated/components/CombatModifiersComponent.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
 
 import "../GameRegistryConsumerUpgradeable.sol";
 
@@ -119,9 +120,13 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         uint256 mixinId = MixinComponent(
             _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
         ).getValue(parentEntity)[0];
-        uint256 slotCount = ItemSlotsComponent(
-            _gameRegistry.getComponent(ITEM_SLOTS_COMPONENT_ID)
+        uint256[] memory itemSlotsPerLevel = ItemSlotsPerLevelComponent(
+            _gameRegistry.getComponent(ITEM_SLOTS_PER_LEVEL_COMPONENT_ID)
         ).getValue(mixinId);
+        uint256 slotCount = itemSlotsPerLevel[
+            LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID))
+                .getValue(parentEntity)
+        ];
         uint256[] memory equippedItems = ItemsEquippedComponent(
             _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
         ).getValue(parentEntity);

@@ -21,9 +21,10 @@ import {NameComponent, ID as NAME_COMPONENT_ID} from "../../generated/components
 import {AnimationUrlComponent, Layout as AnimationUrlComponentLayout, ID as ANIMATION_URL_COMPONENT_ID} from "../../generated/components/AnimationUrlComponent.sol";
 import {DescriptionComponent, Layout as DescriptionComponentLayout, ID as DESCRIPTION_COMPONENT_ID} from "../../generated/components/DescriptionComponent.sol";
 import {ImageUrlComponent, Layout as ImageUrlComponentLayout, ID as IMAGE_URL_COMPONENT_ID} from "../../generated/components/ImageUrlComponent.sol";
-import {ItemSlotsComponent, Layout as ItemSlotsComponentLayout, ID as ITEM_SLOTS_COMPONENT_ID} from "../../generated/components/ItemSlotsComponent.sol";
+import {ItemSlotsPerLevelComponent, Layout as ItemSlotsPerLevelComponentLayout, ID as ITEM_SLOTS_PER_LEVEL_COMPONENT_ID} from "../../generated/components/ItemSlotsPerLevelComponent.sol";
 import {ModelUrlComponent, Layout as ModelUrlComponentLayout, ID as MODEL_URL_COMPONENT_ID} from "../../generated/components/ModelUrlComponent.sol";
 import {ID as SOULBOUND_COMPONENT_ID} from "../../generated/components/SoulboundComponent.sol";
+import {Uint256ArrayComponent, ID as UINT256_ARRAY_COMPONENT_ID} from "../../generated/components/Uint256ArrayComponent.sol";
 
 import {IComponent} from "../../core/components/IComponent.sol";
 
@@ -156,13 +157,17 @@ contract ShipNFTTokenURIHandler is
         });
 
         // non-top-level properties (attributes)
-
+        uint256[] memory itemSlotsPerLevel = ItemSlotsPerLevelComponent(
+            _gameRegistry.getComponent(ITEM_SLOTS_PER_LEVEL_COMPONENT_ID)
+        ).getValue(mixinEntity);
         baseTraits[5] = TokenURITrait({
             name: "Item Slots",
-            value: MixinLibrary.getBytesValue(
-                entity,
-                mixins,
-                IComponent(_gameRegistry.getComponent(ITEM_SLOTS_COMPONENT_ID))
+            value: abi.encode(
+                itemSlotsPerLevel[
+                    LevelComponent(
+                        _gameRegistry.getComponent(LEVEL_COMPONENT_ID)
+                    ).getValue(entity)
+                ]
             ),
             dataType: TraitDataType.UINT,
             isTopLevelProperty: false,

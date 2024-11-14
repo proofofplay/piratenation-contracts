@@ -5,9 +5,10 @@ import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {Equippable} from "./Equippable.sol";
 import {EquipmentType, Item} from "./IEquippable.sol";
 import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
-import {ItemSlotsComponent, Layout as ItemSlotsComponentLayout, ID as ITEM_SLOTS_COMPONENT_ID} from "../generated/components/ItemSlotsComponent.sol";
+import {ItemSlotsPerLevelComponent, Layout as ItemSlotsPerLevelComponentLayout, ID as ITEM_SLOTS_PER_LEVEL_COMPONENT_ID} from "../generated/components/ItemSlotsPerLevelComponent.sol";
 import {IsShipComponent, ID as IS_SHIP_COMPONENT_ID} from "../generated/components/IsShipComponent.sol";
 import {CombatModifiersComponent, ID as COMBAT_MODIFIERS_COMPONENT_ID} from "../generated/components/CombatModifiersComponent.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
 
 // Constants
 uint256 constant ID = uint256(keccak256("game.piratenation.shipequipment"));
@@ -41,12 +42,16 @@ contract ShipEquipment is Equippable {
         uint256 mixinId = MixinComponent(
             _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
         ).getValue(parentEntity)[0];
-        // Get ItemSlotsComponent for the mixin
-        uint256 itemSlotCount = ItemSlotsComponent(
-            _gameRegistry.getComponent(ITEM_SLOTS_COMPONENT_ID)
+        // Get ItemSlotsPerLevelComponent for the mixin
+        uint256[] memory itemSlotsPerLevel = ItemSlotsPerLevelComponent(
+            _gameRegistry.getComponent(ITEM_SLOTS_PER_LEVEL_COMPONENT_ID)
         ).getValue(mixinId);
-
-        return itemSlotCount;
+        // Get the level of the ship
+        return
+            itemSlotsPerLevel[
+                LevelComponent(_gameRegistry.getComponent(LEVEL_COMPONENT_ID))
+                    .getValue(parentEntity)
+            ];
     }
 
     /** INTERNAL **/

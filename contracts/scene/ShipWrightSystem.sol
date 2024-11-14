@@ -27,6 +27,8 @@ import {ShipWrightCooldownComponent, Layout as ShipWrightCooldownComponentLayout
 import {ShipTypeMergeableComponent, ID as SHIP_TYPE_MERGEABLE_COMPONENT_ID} from "../generated/components/ShipTypeMergeableComponent.sol";
 import {ShipWrightPlacedComponent, Layout as ShipWrightPlacedComponentLayout, ID as SHIPWRIGHT_PLACED_COMPONENT_ID} from "../generated/components/ShipWrightPlacedComponent.sol";
 import {MixinComponent, Layout as MixinComponentLayout, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
+import {ILootSystemV2, ID as LOOT_SYSTEM_V2_ID} from "../loot/ILootSystemV2.sol";
+import {LootEntityArrayComponent, Layout as LootEntityArrayComponentLayout, ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
 
 /**
  * @title ShipWrightSystem
@@ -191,6 +193,18 @@ contract ShipWrightSystem is
             input.instanceEntity,
             shipWrightCooldownLayout
         );
+        // Grant any loot rewards from the shipPlan upgrade if any
+        ILootSystemV2.Loot[] memory loots = LootArrayComponentLibrary
+            .convertLootEntityArrayToLoot(
+                _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID),
+                input.shipPlanEntity
+            );
+        if (loots.length > 0) {
+            ILootSystemV2(_gameRegistry.getSystem(LOOT_SYSTEM_V2_ID)).grantLoot(
+                    caller,
+                    loots
+                );
+        }
     }
 
     /**

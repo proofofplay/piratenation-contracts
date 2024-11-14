@@ -12,6 +12,7 @@ import {TransformInstanceComponent, Layout as TransformInstanceComponentLayout, 
 import {TransformInputComponent, Layout as TransformInputComponentLayout, ID as TRANSFORM_INPUT_COMPONENT_ID} from "../generated/components/TransformInputComponent.sol";
 import {GemResourceCostComponent, Layout as GemsResourceCostComponentLayout, ID as GEM_RESOURCE_COST_COMPONENT_ID} from "../generated/components/GemResourceCostComponent.sol";
 import {GemTransformEligibleComponent, ID as GEM_TRANSFORM_ELIGIBLE_COMPONENT_ID} from "../generated/components/GemTransformEligibleComponent.sol";
+import {GemTransformCompleteEligibleComponent, ID as GEM_TRANSFORM_COMPLETE_ELIGIBLE_COMPONENT_ID} from "../generated/components/GemTransformCompleteEligibleComponent.sol";
 import {DefaultTransformRunnerConfigComponent, Layout as DefaultTransformRunnerConfigComponentLayout, ID as DEFAULT_TRANSFORM_RUNNER_CONFIG_COMPONENT_ID} from "../generated/components/DefaultTransformRunnerConfigComponent.sol";
 import {TransformAccountDataComponent, Layout as TransformAccountDataComponentLayout, ID as TRANSFORM_ACCOUNT_DATA_COMPONENT_ID} from "../generated/components/TransformAccountDataComponent.sol";
 import {StaticEntityListComponent, ID as STATIC_ENTITY_LIST_COMPONENT_ID} from "../generated/components/StaticEntityListComponent.sol";
@@ -154,8 +155,10 @@ contract GemUtilitySystem is
             memory transformInstance = transformInstanceComponent
                 .getLayoutValue(transformInstanceEntity);
         if (
-            GemTransformEligibleComponent(
-                _gameRegistry.getComponent(GEM_TRANSFORM_ELIGIBLE_COMPONENT_ID)
+            GemTransformCompleteEligibleComponent(
+                _gameRegistry.getComponent(
+                    GEM_TRANSFORM_COMPLETE_ELIGIBLE_COMPONENT_ID
+                )
             ).getLayoutValue(transformInstance.transformEntity).value == false
         ) {
             revert NotAvailable();

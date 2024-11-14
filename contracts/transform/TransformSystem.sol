@@ -237,7 +237,7 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
      */
     function batchCompleteTransform(
         uint256[] memory transformInstanceEntities
-    ) public nonReentrant whenNotPaused onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
+    ) public nonReentrant whenNotPaused {
         if (transformInstanceEntities.length == 0) {
             revert EmptyTransformArray();
         }

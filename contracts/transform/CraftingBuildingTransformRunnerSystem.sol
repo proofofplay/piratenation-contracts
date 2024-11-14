@@ -188,7 +188,15 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
                 0
             );
         } else {
-            // To keep the queue in order, remove the first transform and update the list
+            TransformInstanceComponent transformInstanceComponent = TransformInstanceComponent(
+                    _gameRegistry.getComponent(TRANSFORM_INSTANCE_COMPONENT_ID)
+                );
+            TransformConfigTimeLockComponent timeLockComponent = TransformConfigTimeLockComponent(
+                    _gameRegistry.getComponent(
+                        TRANSFORM_CONFIG_TIME_LOCK_COMPONENT_ID
+                    )
+                );
+            // To keep the queue in order, remove the first transform and update the list and update the start time of the next transform
             uint256[] memory newPendingCraftTransforms = new uint256[](
                 pendingCraftTransforms.length - 1
             );
@@ -196,6 +204,39 @@ contract CraftingBuildingTransformRunnerSystem is BaseTransformRunnerSystem {
                 newPendingCraftTransforms[idx] = pendingCraftTransforms[
                     idx + 1
                 ];
+                TransformInstanceComponentLayout
+                    memory nextTransformInstance = transformInstanceComponent
+                        .getLayoutValue(pendingCraftTransforms[idx + 1]);
+                TransformInstanceComponentLayout
+                    memory previousTransformInstance = transformInstanceComponent
+                        .getLayoutValue(pendingCraftTransforms[idx]);
+                TransformConfigTimeLockComponentLayout
+                    memory previousConfig = timeLockComponent.getLayoutValue(
+                        previousTransformInstance.transformEntity
+                    );
+                if (
+                    block.timestamp >=
+                    previousTransformInstance.startTime +
+                        previousConfig.value &&
+                    block.timestamp < nextTransformInstance.startTime
+                ) {
+                    nextTransformInstance.startTime = uint32(block.timestamp);
+                } else {
+                    if (
+                        block.timestamp <
+                        previousTransformInstance.startTime +
+                            previousConfig.value
+                    ) {
+                        nextTransformInstance
+                            .startTime = (previousTransformInstance.startTime +
+                            previousConfig.value);
+                    }
+                }
+                // Save the transform instance
+                transformInstanceComponent.setLayoutValue(
+                    pendingCraftTransforms[idx + 1],
+                    nextTransformInstance
+                );
             }
             pendingIslandTransformListComponent.setValue(
                 instanceEntity,
