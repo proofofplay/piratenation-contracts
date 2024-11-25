@@ -63,5 +63,5 @@ interface IEquippable {
      * @param parentEntity A packed tokenId and address for the parent entity which will equip the item
      * @param items Array of params which specify entity, slot type, and slot index to remove from
      */
-    function removeItems(uint256 parentEntity, Item[] calldata items) external;
+    //function removeItems(uint256 parentEntity, Item[] calldata items) external;
 }

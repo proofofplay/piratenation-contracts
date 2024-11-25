@@ -45,6 +45,9 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
     /// @notice Desired slot index is invalid
     error InvalidSlotIndex(uint256 slotCount, uint256 indexUsed);
 
+    /// @notice Single item can be equipped at a time
+    error SingleEquip();
+
     /** EXTERNAL **/
 
     /**
@@ -68,21 +71,21 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
     /**
      * @inheritdoc IEquippable
      */
-    function removeItems(
-        uint256 parentEntity,
-        Item[] calldata items
-    ) external whenNotPaused {
-        address account = _getPlayerAccount(_msgSender());
+    // function removeItems(
+    //     uint256 parentEntity,
+    //     Item[] calldata items
+    // ) external whenNotPaused {
+    //     address account = _getPlayerAccount(_msgSender());
 
-        // Vaidate parentEntity belongs to caller
-        if (!_isParentOwner(account, parentEntity)) {
-            revert InvalidParent();
-        }
+    //     // Vaidate parentEntity belongs to caller
+    //     if (!_isParentOwner(account, parentEntity)) {
+    //         revert InvalidParent();
+    //     }
 
-        for (uint256 i = 0; i < items.length; ++i) {
-            _removeItem(account, parentEntity, items[i]);
-        }
-    }
+    //     for (uint256 i = 0; i < items.length; ++i) {
+    //         _removeItem(account, parentEntity, items[i]);
+    //     }
+    // }
 
     /**
      * @inheritdoc IEquippable
@@ -98,14 +101,12 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         if (!_isParentOwner(account, parentEntity)) {
             revert InvalidParent();
         }
+        if (items.length > 1) {
+            revert SingleEquip();
+        }
 
         for (uint256 i = 0; i < items.length; ++i) {
-            _setItem(
-                account,
-                parentEntity,
-                existingItems[items[i].slotIndex],
-                items[i]
-            );
+            _setItem(account, parentEntity, items[i]);
         }
     }
 
@@ -132,7 +133,15 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         ).getValue(parentEntity);
         // Pull current equipped items of ship or initialize new array if no data exists
         if (equippedItems.length > 0) {
-            return equippedItems;
+            if (equippedItems.length < slotCount) {
+                uint256[] memory newEquippedItems = new uint256[](slotCount);
+                for (uint256 i = 0; i < equippedItems.length; i++) {
+                    newEquippedItems[i] = equippedItems[i];
+                }
+                return newEquippedItems;
+            } else {
+                return equippedItems;
+            }
         } else {
             return new uint256[](slotCount);
         }
@@ -166,7 +175,6 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
     function _requireValidItem(
         address account,
         uint256 parentEntity,
-        uint256 existingItemEntity,
         Item calldata item
     ) internal {
         (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
@@ -192,9 +200,9 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
         uint256[] memory slots = _getItems(parentEntity);
         if (
             slots[item.slotIndex] != 0 &&
-            slots[item.slotIndex] != existingItemEntity
+            slots[item.slotIndex] == item.itemEntity
         ) {
-            revert InvalidSlot(slots[item.slotIndex], existingItemEntity);
+            revert InvalidSlot(slots[item.slotIndex], item.itemEntity);
         }
 
         // If combatmodifiers exist then its equippable
@@ -220,13 +228,12 @@ abstract contract Equippable is GameRegistryConsumerUpgradeable, IEquippable {
     function _setItem(
         address account,
         uint256 parentEntity,
-        uint256 existingItemEntity,
         Item calldata item
     ) internal {
         uint256[] memory currentSlots = _getItems(parentEntity);
 
         // Validate item and parent are compatible
-        _requireValidItem(account, parentEntity, existingItemEntity, item);
+        _requireValidItem(account, parentEntity, item);
 
         (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
             item.itemEntity

@@ -12,6 +12,8 @@ import {IERC1155BeforeTokenTransferHandler} from "../IERC1155BeforeTokenTransfer
 import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "../../generated/components/ChainIdComponent.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 
+uint256 constant MAX_TOKEN_ID = 1000;
+
 /** @title ERC1155 contract for Game Items */
 contract GameItems is
     TraitsConsumerUpgradeable,
@@ -130,6 +132,9 @@ contract GameItems is
         uint256 id,
         uint256 amount
     ) external override onlyRole(MINTER_ROLE) whenNotPaused {
+        if (id > MAX_TOKEN_ID) {
+            revert InvalidTokenId();
+        }
         _safeMint(to, id, amount);
     }
 

@@ -100,7 +100,7 @@ contract ShipNFT is GameNFTV2Upgradeable {
             _burn(ids[i]);
         }
     }
-    
+
     function _afterTokenTransfer(
         address,
         address to,
