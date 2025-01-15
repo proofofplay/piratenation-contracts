@@ -6,6 +6,8 @@ import "../ship/ShipSystemV2.sol";
 
 /** @title ShipSystemV2 Mock for testing */
 contract ShipSystemV2Mock is ShipSystemV2 {
+    error InvalidLevel();
+
     function grantLootForTests(
         address account,
         uint256 lootId,

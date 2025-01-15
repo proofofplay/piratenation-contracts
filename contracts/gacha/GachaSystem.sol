@@ -16,7 +16,7 @@ import {EnabledComponent, ID as ENABLED_COMPONENT_ID} from "../generated/compone
 import {LootEntityArrayComponent, Layout as LootEntityArrayComponentLayout, ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
 import {ID as TIME_RANGE_COMPONENT_ID} from "../generated/components/TimeRangeComponent.sol";
 
-import {RANDOMIZER_ROLE} from "../Constants.sol";
+import {VRF_SYSTEM_ROLE} from "../Constants.sol";
 
 /**
  * @title GachaSystem
@@ -111,7 +111,7 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
         counterComponent.setValue(gachaComponentId, currentCount - 1);
 
         // Kick off VRF request
-        VRFRequest storage vrfRequest = _vrfRequests[_requestRandomWords(1)];
+        VRFRequest storage vrfRequest = _vrfRequests[_requestRandomNumber(0)];
         vrfRequest.account = account;
         vrfRequest.gachaComponentId = gachaComponentId;
     }
@@ -119,10 +119,10 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
     /**
      * @notice Callback function used by VRF Coordinator
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
-    ) external override onlyRole(RANDOMIZER_ROLE) {
+        uint256 randomNumber
+    ) external override onlyRole(VRF_SYSTEM_ROLE) {
         VRFRequest storage request = _vrfRequests[requestId];
         if (request.account != address(0)) {
             GachaComponent gachaComponent = GachaComponent(
@@ -140,7 +140,7 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
             );
             uint256 subLength = currLength - 1;
 
-            uint256 randomIndex = randomWords[0] % currLength;
+            uint256 randomIndex = randomNumber % currLength;
 
             LootEntityArrayComponent lootEntityArrayComponent = LootEntityArrayComponent(
                     _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID)
@@ -172,7 +172,7 @@ contract GachaSystem is IGachaSystem, GameRegistryConsumerUpgradeable {
                 request.gachaComponentId + subLength
             );
 
-            _rewardLoots(randomLoot, request.account, randomWords[0]);
+            _rewardLoots(randomLoot, request.account, randomNumber);
 
             emit GachaComplete(request.gachaComponentId, request.account);
             // Delete the VRF request

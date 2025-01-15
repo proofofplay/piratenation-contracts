@@ -21,6 +21,15 @@ bytes32 constant PRICE_INDEX_ROLE = keccak256("PRICE_INDEX_ROLE");
 // Manager Role - Can adjust how contract functions (limits, paused, etc)
 bytes32 constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
+// Ability to burn tokens
+// NOTE: MUST BE SET BETWEEN 1 and 100;
+uint256 constant BURN_PERCENTAGE = 50;
+
+// Interface for a burnable token
+interface IERC20Burnable {
+    function burn(uint256 amount) external;
+}
+
 /**
  * @title ITokenShop
  * @dev Interface for the Purchase contract outlining PurchaseFromStake
@@ -567,6 +576,9 @@ contract PirateTokenShop is
 
         // Transfer directly from the caller to this contract
         token.transferFrom(msg.sender, address(this), total);
+
+        // Burn percentage of total;
+        IERC20Burnable(address(token)).burn((total * BURN_PERCENTAGE) / 100);
 
         // Purchase is successful! Emit event for Oracle to pick up deliver on client chain
         // And helpful for accounting

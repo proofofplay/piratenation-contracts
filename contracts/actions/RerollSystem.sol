@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
-import {RANDOMIZER_ROLE} from "../Constants.sol";
+import {VRF_SYSTEM_ROLE} from "../Constants.sol";
 
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 
@@ -82,7 +82,7 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
             : ELEMENTAL_AFFINITY_ROLL_CONFIG;
         _burnInputForPirate(caller, pirateEntity, configEntityId);
         // Kick off VRF
-        uint256 requestId = _requestRandomWords(1);
+        uint256 requestId = _requestRandomNumber(0);
         RerollPendingComponent rerollPendingComponent = RerollPendingComponent(
             _gameRegistry.getComponent(REROLL_PENDING_COMPONENT_ID)
         );
@@ -115,10 +115,10 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
     /**
      * @notice Callback function used by VRF Coordinator
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
-    ) external override onlyRole(RANDOMIZER_ROLE) {
+        uint256 randomNumber
+    ) external override onlyRole(VRF_SYSTEM_ROLE) {
         VRFRequest storage request = _vrfRequests[requestId];
         ExpertiseComponent expertiseComponent = ExpertiseComponent(
             _gameRegistry.getComponent(EXPERTISE_COMPONENT_ID)
@@ -128,7 +128,6 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
         );
 
         if (request.pirateEntity != 0) {
-            uint256 randomWord = randomWords[0];
             uint256 currentVal = 0;
             if (request.expertiseRoll) {
                 currentVal = expertiseComponent.getValue(request.pirateEntity);
@@ -136,7 +135,7 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
                 currentVal = affinityComponent.getValue(request.pirateEntity);
             }
 
-            uint256 newTrait = generateDifferentTrait(randomWord, currentVal);
+            uint256 newTrait = generateDifferentTrait(randomNumber, currentVal);
             RerollPendingComponent rerollPendingComponent = RerollPendingComponent(
                     _gameRegistry.getComponent(REROLL_PENDING_COMPONENT_ID)
                 );

@@ -9,6 +9,7 @@ import {ILootCallbackV2} from "../loot/ILootCallbackV2.sol";
 import {IShipNFT} from "../tokens/shipnft/IShipNFT.sol";
 import {ID as SHIP_NFT_ID} from "../tokens/shipnft/ShipNFT.sol";
 import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../generated/components/MixinComponent.sol";
+import {LevelComponent, ID as LEVEL_COMPONENT_ID} from "../generated/components/LevelComponent.sol";
 import {MintCounterComponent, ID as MINT_COUNTER_COMPONENT_ID} from "../generated/components/MintCounterComponent.sol";
 
 import {IERC165, GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
@@ -40,7 +41,8 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
     }
 
     function currentShipId() external view returns (uint256) {
-            return MintCounterComponent(
+        return
+            MintCounterComponent(
                 _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
             ).getValue(ID);
     }
@@ -72,6 +74,50 @@ contract ShipSystemV2 is GameRegistryConsumerUpgradeable, ILootCallbackV2 {
         uint256 amount
     ) external override(ILootCallbackV2) onlyRole(MINTER_ROLE) whenNotPaused {
         _mintAndInitializeLoot(account, lootId, amount);
+    }
+
+    /**
+     * Grants Ship with level
+     *
+     * @param account       Address of the accouint to mint to
+     * @param lootId        NFT template tokenId of ship to mint
+     * @param amount        Amount to mint
+     *
+     */
+    function grantShipWithLevel(
+        address account,
+        uint256 lootId,
+        uint256 amount,
+        uint256 level
+    ) external onlyRole(MINTER_ROLE) whenNotPaused {
+        if (amount < 1) {
+            revert InvalidGrantAmount();
+        }
+
+        MintCounterComponent mintCounterComponent = MintCounterComponent(
+            _gameRegistry.getComponent(MINT_COUNTER_COMPONENT_ID)
+        );
+        uint256 _currentShipId = mintCounterComponent.getValue(ID);
+
+        IShipNFT shipNFT = IShipNFT(_getSystem(SHIP_NFT_ID));
+        MixinComponent mixinComponent = MixinComponent(
+            _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+        );
+        LevelComponent levelComponent = LevelComponent(
+            _gameRegistry.getComponent(LEVEL_COMPONENT_ID)
+        );
+        for (uint8 idx = 0; idx < amount; idx++) {
+            // Increment current token id to next id
+            _currentShipId++;
+            uint96 tokenId = TokenIdLibrary.generateTokenId(_currentShipId);
+            _mintAndSetup(shipNFT, mixinComponent, account, tokenId, lootId);
+            levelComponent.setValue(
+                EntityLibrary.tokenToEntity(address(shipNFT), tokenId),
+                level
+            );
+        }
+
+        mintCounterComponent.setValue(ID, _currentShipId);
     }
 
     /**

@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {MINTER_ROLE, MANAGER_ROLE, RANDOMIZER_ROLE, XP_TRAIT_ID, LEVEL_TRAIT_ID} from "../Constants.sol";
+import {MINTER_ROLE, MANAGER_ROLE, VRF_SYSTEM_ROLE, XP_TRAIT_ID, LEVEL_TRAIT_ID} from "../Constants.sol";
 import {RandomLibrary} from "../libraries/RandomLibrary.sol";
 import {StarterPirateNFT, ID as STARTER_PIRATE_NFT_ID} from "../tokens/starterpiratenft/StarterPirateNFT.sol";
 import {ILootCallbackV2} from "../loot/ILootCallbackV2.sol";
@@ -180,18 +180,17 @@ contract StarterPirateSystemV2 is
     /**
      * @notice Callback function used by VRF Coordinator
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
-    ) external override onlyRole(RANDOMIZER_ROLE) {
+        uint256 randomNumber
+    ) external override onlyRole(VRF_SYSTEM_ROLE) {
         VRFRequest storage request = _vrfRequests[requestId];
         if (request.account != address(0)) {
-            uint256 randomWord = randomWords[0];
             // Set template ID
             _handleMintAndInitializeStarterPirate(
                 request.tokenId,
                 request.lootId,
-                randomWord,
+                randomNumber,
                 request.account
             );
 
@@ -265,7 +264,7 @@ contract StarterPirateSystemV2 is
 
             // Request VRF
             VRFRequest storage vrfRequest = _vrfRequests[
-                _requestRandomWords(1)
+                _requestRandomNumber(0)
             ];
             vrfRequest.account = account;
             vrfRequest.tokenId = currentNftId;

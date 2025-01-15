@@ -430,8 +430,13 @@ contract TradeableShipNFT is
                 getApproved(tokenId) == spender);
     }
 
-    function _checkOwnership(uint256 tokenId) private view {
-        address owner = _ownerOf(tokenId); // thist hrows invalid token if it's to 0
+    function _checkOwnership(address owner, uint256 tokenId) private view {
+        address spender = _msgSender();
+        //Verify that owner is the owner of the token
+        if (owner != _ownerOf(tokenId)) {
+            revert ERC721InsufficientApproval(owner, tokenId);
+        }
+
         if (
             BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID)).getValue(
                 EntityLibrary.addressToEntity(owner)
@@ -439,8 +444,6 @@ contract TradeableShipNFT is
         ) {
             revert Banned();
         }
-
-        address spender = _msgSender();
 
         if (!_isAuthorized(owner, spender, tokenId)) {
             revert ERC721InsufficientApproval(spender, tokenId);
@@ -567,7 +570,7 @@ contract TradeableShipNFT is
      * @dev Underlying transferFrom logic
      */
     function _transferFrom(address from, address to, uint256 tokenId) internal {
-        _checkOwnership(tokenId);
+        _checkOwnership(from, tokenId);
         _checkTradeLicense(from);
         MixinComponent mixinComponent = MixinComponent(
             _gameRegistry.getComponent(MIXIN_COMPONENT_ID)

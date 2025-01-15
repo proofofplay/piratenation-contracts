@@ -38,7 +38,7 @@ bytes32 constant GAME_ITEMS_CONTRACT_ROLE = keccak256(
 bytes32 constant DEPOSITOR_ROLE = keccak256("DEPOSITOR_ROLE");
 
 // Randomizer role - Used by the randomizer contract to callback
-bytes32 constant RANDOMIZER_ROLE = keccak256("RANDOMIZER_ROLE");
+bytes32 constant VRF_SYSTEM_ROLE = keccak256("VRF_SYSTEM_ROLE");
 
 // Trusted forwarder role - Used by meta transactions to verify trusted forwader(s)
 bytes32 constant TRUSTED_FORWARDER_ROLE = keccak256("TRUSTED_FORWARDER_ROLE");

@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
-import {RANDOMIZER_ROLE, MANAGER_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
+import {VRF_SYSTEM_ROLE, MANAGER_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 
 import {ILootSystemV2, ID} from "./ILootSystemV2.sol";
 import {IGameNFTLoot} from "../tokens/gamenft/IGameNFTLoot.sol";
@@ -103,7 +103,7 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
         }
 
         if (needVRF) {
-            uint256 requestId = _requestRandomWords(1);
+            uint256 requestId = _requestRandomNumber(0);
             VRFRequest storage request = vrfRequests[requestId];
             request.account = to;
             for (idx = 0; idx < loots.length; ++idx) {
@@ -158,15 +158,15 @@ contract LootSystemV2 is ILootSystemV2, GameRegistryConsumerUpgradeable {
      * Finish granting loot using randomness from VRF
      * @inheritdoc GameRegistryConsumerUpgradeable
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
-    ) external override onlyRole(RANDOMIZER_ROLE) {
+        uint256 randomNumber
+    ) external override onlyRole(VRF_SYSTEM_ROLE) {
         VRFRequest storage request = vrfRequests[requestId];
         address account = request.account;
 
         if (account != address(0)) {
-            _finishGrantLoot(account, request.loots, randomWords[0]);
+            _finishGrantLoot(account, request.loots, randomNumber);
 
             // Delete the VRF request
             delete vrfRequests[requestId];

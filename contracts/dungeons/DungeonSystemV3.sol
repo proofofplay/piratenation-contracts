@@ -7,7 +7,7 @@ import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 
 import {ILootSystemV2, ID as LOOT_SYSTEM_V2_ID} from "../loot/ILootSystemV2.sol";
-import {RANDOMIZER_ROLE} from "../Constants.sol";
+import {VRF_SYSTEM_ROLE} from "../Constants.sol";
 import {EndBattleParams, IDungeonBattleSystemV2, ID as DUNGEON_BATTLE_SYSTEM_ID} from "./IDungeonBattleSystemV2.sol";
 import {IDungeonProgressSystem, ID as DUNGEON_PROGRESS_SYSTEM_ID, DungeonNodeProgressState} from "./IDungeonProgressSystem.sol";
 import {StartAndEndDungeonBattleParams, StartAndEndValidatedDungeonBattleParams, StartDungeonBattleParams, EndDungeonBattleParams, IDungeonSystemV3, DungeonMap, DungeonNode, DungeonTrigger} from "./IDungeonSystemV3.sol";
@@ -294,17 +294,17 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
     /**
      * @inheritdoc GameRegistryConsumerUpgradeable
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
-    ) external override onlyRole(RANDOMIZER_ROLE) {
+        uint256 randomNumber
+    ) external override onlyRole(VRF_SYSTEM_ROLE) {
         LootRequest storage request = _vrfRequests[requestId];
 
         if (request.account != address(0)) {
             // Grant the loot.
             _grantLootComplete(
                 request,
-                randomWords[0],
+                randomNumber,
                 _getDungeonNode(request.node).loots,
                 ILootSystemV2(_gameRegistry.getSystem(LOOT_SYSTEM_V2_ID))
             );
@@ -543,8 +543,8 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
         // Validate loots; returns true if VRF required.
         if (lootSystem.validateLoots(loots)) {
             // Generate a random number for the VRF request and
-            // complete loot grant in fulfillRandomWordsCallback.
-            uint256 requestId = _requestRandomWords(1);
+            // complete loot grant in randomNumberCallback.
+            uint256 requestId = _requestRandomNumber(0);
             _vrfRequests[requestId] = request;
         } else {
             // Grant loot right away.

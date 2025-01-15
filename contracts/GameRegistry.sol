@@ -13,7 +13,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 import "@opengsn/contracts/src/interfaces/IERC2771Recipient.sol";
 
-import {PAUSER_ROLE, RANDOMIZER_ROLE, DEPOSITOR_ROLE, MANAGER_ROLE, MINTER_ROLE, GAME_CURRENCY_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_ITEMS_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE, TRUSTED_FORWARDER_ROLE, DEPLOYER_ROLE, TRUSTED_MULTICHAIN_ORACLE_ROLE} from "./Constants.sol";
+import {PAUSER_ROLE, VRF_SYSTEM_ROLE, DEPOSITOR_ROLE, MANAGER_ROLE, MINTER_ROLE, GAME_CURRENCY_CONTRACT_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_ITEMS_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE, TRUSTED_FORWARDER_ROLE, DEPLOYER_ROLE, TRUSTED_MULTICHAIN_ORACLE_ROLE} from "./Constants.sol";
 import "./core/IGameRegistry.sol";
 import {EntityLibrary} from "./core/EntityLibrary.sol";
 import {IComponent} from "./core/components/IComponent.sol";
@@ -340,7 +340,7 @@ contract GameRegistry is
         _setupRole(DEFAULT_ADMIN_ROLE, admin);
 
         _setRoleAdmin(PAUSER_ROLE, DEFAULT_ADMIN_ROLE);
-        _setRoleAdmin(RANDOMIZER_ROLE, DEFAULT_ADMIN_ROLE);
+        _setRoleAdmin(VRF_SYSTEM_ROLE, DEFAULT_ADMIN_ROLE);
         _setRoleAdmin(DEPOSITOR_ROLE, DEFAULT_ADMIN_ROLE);
         _setRoleAdmin(MINTER_ROLE, DEFAULT_ADMIN_ROLE);
         _setRoleAdmin(MANAGER_ROLE, DEFAULT_ADMIN_ROLE);

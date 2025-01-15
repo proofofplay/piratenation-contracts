@@ -3,7 +3,7 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 
-import {GAME_LOGIC_CONTRACT_ROLE, RANDOMIZER_ROLE} from "../Constants.sol";
+import {GAME_LOGIC_CONTRACT_ROLE, VRF_SYSTEM_ROLE} from "../Constants.sol";
 import {ICooldownSystem, ID as COOLDOWN_SYSTEM_ID} from "../cooldown/ICooldownSystem.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
@@ -72,18 +72,18 @@ abstract contract CoreBattleSystem is GameRegistryConsumerUpgradeable {
     /**
      * @dev callback executed only in the VRF oracle to resolve randomness for a battle
      * @param requestId identifier for the VRF request
-     * @param randomWords an array containing (currently only 1) randomized strings
+     * @param randomNumber a random number
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
-    ) external override onlyRole(RANDOMIZER_ROLE) {
+        uint256 randomNumber
+    ) external override onlyRole(VRF_SYSTEM_ROLE) {
         // Store random battle seed
         Battle storage battle = _battles[_requestToBattleEntity[requestId]];
 
         // Update battle only if it exists; it may have been deleted already
         if (battle.battleEntity != 0) {
-            battle.battleSeed = randomWords[0];
+            battle.battleSeed = randomNumber;
 
             // Emit event
             emit BattleStarted(battle.battleEntity, battle.battleSeed);
@@ -129,7 +129,7 @@ abstract contract CoreBattleSystem is GameRegistryConsumerUpgradeable {
         });
 
         // Request VRF randomness for battle
-        // uint256 requestId = _requestRandomWords(1);
+        // uint256 requestId = _requestRandomNumber(1);
         // _requestToBattleEntity[requestId] = battleEntity;
 
         // Emit event

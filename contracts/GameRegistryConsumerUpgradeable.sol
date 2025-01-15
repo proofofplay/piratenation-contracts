@@ -10,7 +10,8 @@ import {PERCENTAGE_RANGE, TRUSTED_FORWARDER_ROLE, PAUSER_ROLE, MANAGER_ROLE} fro
 
 import {ISystem} from "./core/ISystem.sol";
 import {ITraitsProvider, ID as TRAITS_PROVIDER_ID} from "./interfaces/ITraitsProvider.sol";
-import {IRandomizer, IRandomizerCallback, ID as RANDOMIZER_ID} from "./randomizer/IRandomizer.sol";
+import {IVRFSystem, ID as VRF_SYSTEM_ID} from "./vrf/IVRFSystem.sol";
+import {IVRFSystemCallback} from "./vrf/IVRFSystemCallback.sol";
 import {ILootSystem, ID as LOOT_SYSTEM_ID} from "./loot/ILootSystem.sol";
 import {IGameRegistry, IERC165} from "./core/IGameRegistry.sol";
 
@@ -18,7 +19,7 @@ import {IGameRegistry, IERC165} from "./core/IGameRegistry.sol";
 abstract contract GameRegistryConsumerUpgradeable is
     ReentrancyGuardUpgradeable,
     IERC2771Recipient,
-    IRandomizerCallback,
+    IVRFSystemCallback,
     ISystem
 {
     /// @notice Whether or not the contract is paused
@@ -159,14 +160,14 @@ abstract contract GameRegistryConsumerUpgradeable is
     }
 
     /**
-     * Callback for when a random number request has returned with random words
+     * Callback for when a random number request has returned with a random number
      *
      * @param requestId     Id of the request
-     * @param randomWords   Random words
+     * @param randomNumber   Random number
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
+        uint256 randomNumber
     ) external virtual override {
         // Do nothing by default
     }
@@ -206,9 +207,9 @@ abstract contract GameRegistryConsumerUpgradeable is
         return ILootSystem(_gameRegistry.getSystem(LOOT_SYSTEM_ID));
     }
 
-    /** @return Interface to the Randomizer */
-    function _randomizer() internal view returns (IRandomizer) {
-        return IRandomizer(_gameRegistry.getSystem(RANDOMIZER_ID));
+    /** @return Interface to the VRF */
+    function _vrf() internal view returns (IVRFSystem) {
+        return IVRFSystem(_gameRegistry.getSystem(VRF_SYSTEM_ID));
     }
 
     /** @return Address for a given system */
@@ -217,18 +218,14 @@ abstract contract GameRegistryConsumerUpgradeable is
     }
 
     /**
-     * Requests randomness from the game's Randomizer contract
+     * Requests randomness from the game's VRF
      *
-     * @param numWords Number of words to request from the VRF
+     * @param traceId A traceId to use that joins many x-chain requests together
      *
-     * @return Id of the randomness request
+     * @return requestId of the randomness request
      */
-    function _requestRandomWords(uint32 numWords) internal returns (uint256) {
-        return
-            _randomizer().requestRandomWords(
-                IRandomizerCallback(this),
-                numWords
-            );
+    function _requestRandomNumber(uint32 traceId) internal returns (uint256) {
+        return _vrf().requestRandomNumberWithTraceId(traceId);
     }
 
     /**

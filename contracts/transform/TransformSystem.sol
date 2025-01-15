@@ -9,7 +9,7 @@ import {RandomLibrary} from "../libraries/RandomLibrary.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {TransformLibrary} from "./TransformLibrary.sol";
 
-import {RANDOMIZER_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
+import {VRF_SYSTEM_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 
 import {ILootSystemV2, ID as LOOT_SYSTEM_ID} from "../loot/ILootSystemV2.sol";
 import {IGameItems} from "../tokens/gameitems/IGameItems.sol";
@@ -253,10 +253,10 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     /**
      * Finishes transform with randomness
      */
-    function fulfillRandomWordsCallback(
+    function randomNumberCallback(
         uint256 requestId,
-        uint256[] memory randomWords
-    ) external override onlyRole(RANDOMIZER_ROLE) {
+        uint256 randomNumber
+    ) external override onlyRole(VRF_SYSTEM_ROLE) {
         VRFRequest storage request = _vrfRequests[requestId];
         address account = request.account;
 
@@ -276,14 +276,13 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
 
             uint16 numSuccess = transformInstance.count;
             uint16 newNumSuccess;
-            uint256 randomWord = randomWords[0];
 
             for (uint256 idx; idx < transformRunners.length; ++idx) {
-                (newNumSuccess, randomWord) = transformRunners[idx]
+                (newNumSuccess, randomNumber) = transformRunners[idx]
                     .completeTransform(
                         transformInstance,
                         transformInstanceEntity,
-                        randomWord
+                        randomNumber
                     );
 
                 // We take the min of the num success
@@ -297,7 +296,7 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
                 transformInstance,
                 transformInstanceEntity,
                 numSuccess,
-                randomWord,
+                randomNumber,
                 transformRunners
             );
 
@@ -538,7 +537,7 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
             ).setLayoutValue(transformInstanceEntity, transformInstance);
 
             // Request random words from the randomizer and store the request
-            uint256 requestId = _requestRandomWords(1);
+            uint256 requestId = _requestRandomNumber(0);
             _vrfRequests[requestId] = VRFRequest({
                 account: account,
                 transformInstanceEntity: transformInstanceEntity
