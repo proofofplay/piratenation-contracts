@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT LICENSE
 pragma solidity ^0.8.26;
 
-import {GAME_LOGIC_CONTRACT_ROLE, VRF_SYSTEM_ROLE} from "../Constants.sol";
+import {GAME_LOGIC_CONTRACT_ROLE, VRF_CONSUMER_ROLE, MANAGER_ROLE, VRF_SYSTEM_ROLE} from "../Constants.sol";
 import {IVRFSystem, ID} from "./IVRFSystem.sol";
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {IVRFSystemOracle} from "./IVRFSystemOracle.sol";
@@ -9,17 +9,21 @@ import {IVRFSystemCallback} from "./IVRFSystemCallback.sol";
 
 /// @notice Emitted when a random number request is initiated
 /// @param requestId The unique identifier for the random number request
+/// @param callbackAddress The address the random number is requested to
 /// @param traceId The trace ID used to track the request across transactions (0 if no trace ID)
-event RandomNumberRequested(uint256 indexed requestId, uint256 indexed traceId);
+event RandomNumberRequested(uint256 indexed requestId, address indexed callbackAddress, uint256 indexed traceId);
 
 /// @notice Emitted when a random number is successfully delivered
 /// @param requestId The unique identifier of the fulfilled request
+/// @param callbackAddress the adddress was random number is requested to
 /// @param traceId The trace ID associated with the request
-/// @param number The random number that was generated
-event RandomNumberDelivered(uint256 indexed requestId, uint256 indexed traceId, uint256 number);
+/// @param roundNumber The round number that was used for the random number
+/// @param randomNumber The random number that was generated
+event RandomNumberDelivered(uint256 indexed requestId, address indexed callbackAddress, uint256 indexed traceId, uint256 roundNumber, uint256 randomNumber);
 
 /// @notice Thrown when attempting to deliver a random number for a non-existent request
 error InvalidRequestId();
+error InvalidCaller();
 
 /**
  * Random number generator based off of Proof of Play VRF
@@ -45,12 +49,16 @@ contract VRFSystem is IVRFSystemOracle, GameRegistryConsumerUpgradeable
      *
      * @param traceId            TraceId to use for the request (keeps track of one request over many transactions) - Use 0 if no traceId
      */
-     function requestRandomNumberWithTraceId(uint256 traceId) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) returns (uint256) {
+     function requestRandomNumberWithTraceId(uint256 traceId) external returns (uint256) {
+         if (!_gameRegistry.hasAccessRole(GAME_LOGIC_CONTRACT_ROLE, msg.sender) && (!_gameRegistry.hasAccessRole(VRF_CONSUMER_ROLE, msg.sender))) {
+             revert InvalidCaller();
+         }
+
          requestId++;
          requestIdToTraceId[requestId] = traceId;
          callbacks[requestId] = IVRFSystemCallback(msg.sender);
 
-         emit RandomNumberRequested(requestId, traceId);
+         emit RandomNumberRequested(requestId, msg.sender, traceId);
 
          return requestId;
      }
@@ -72,6 +80,7 @@ contract VRFSystem is IVRFSystemOracle, GameRegistryConsumerUpgradeable
      */
      function deliverRandomNumber(
          uint256 id,
+         uint256 roundNumber,
          uint256 randomNumber
      ) external override onlyRole(VRF_SYSTEM_ROLE) {
          IVRFSystemCallback callbackAddress = callbacks[id];
@@ -82,8 +91,9 @@ contract VRFSystem is IVRFSystemOracle, GameRegistryConsumerUpgradeable
          uint256 traceId = requestIdToTraceId[id];
          delete callbacks[id];
 
-         callbackAddress.randomNumberCallback(id, randomNumber);
+         // note: we add requestId here to add entropy so every call is not the same.
+         callbackAddress.randomNumberCallback(id, randomNumber + requestId);
 
-         emit RandomNumberDelivered(id, traceId, randomNumber);
+         emit RandomNumberDelivered(id, address(callbackAddress), traceId, roundNumber, randomNumber);
      }
 }
