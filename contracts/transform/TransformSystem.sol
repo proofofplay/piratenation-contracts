@@ -30,7 +30,6 @@ import {TimeRangeLibrary} from "../core/TimeRangeLibrary.sol";
 import {IAccountXpSystem, ID as ACCOUNT_XP_SYSTEM_ID} from "../trade/IAccountXpSystem.sol";
 import {ID as ACCOUNT_SKILLS_XP_GRANTED_ID} from "../generated/components/AccountSkillsXpGrantedComponent.sol";
 import {ID as ACCOUNT_SKILL_REQUIREMENTS_ID} from "../generated/components/AccountSkillRequirementsComponent.sol";
-
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 
 contract TransformSystem is GameRegistryConsumerUpgradeable {
@@ -587,10 +586,12 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
         TransformParams calldata params
     ) internal {
         TransformInputComponentLayout
-            memory transformDefInputs = _getTransformInputs(
-                params.transformEntity
-            );
-
+            memory transformDefInputs = TransformLibrary
+                .getTransformInputsForAccount(
+                    _gameRegistry,
+                    account,
+                    params.transformEntity
+                );
         // Error if we're missing inputs
         if (transformDefInputs.inputType.length == 0) {
             revert MissingInputsOrOutputs();
@@ -905,17 +906,6 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
         }
 
         return true;
-    }
-
-    /** @return Get the transform inputs from the transform entity */
-    function _getTransformInputs(
-        uint256 transformEntity
-    ) internal view returns (TransformInputComponentLayout memory) {
-        // Get the transform inputs from the transform entity
-        TransformInputComponent transformInputComponent = TransformInputComponent(
-                _gameRegistry.getComponent(TRANSFORM_INPUT_COMPONENT_ID)
-            );
-        return transformInputComponent.getLayoutValue(transformEntity);
     }
 
     function _getTransformRunners(

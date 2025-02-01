@@ -369,9 +369,12 @@ contract GemUtilitySystem is
         TransformParams calldata params
     ) internal returns (uint256 resourcesInSeconds) {
         TransformInputComponentLayout
-            memory transformDefInputs = TransformInputComponent(
-                _gameRegistry.getComponent(TRANSFORM_INPUT_COMPONENT_ID)
-            ).getLayoutValue(params.transformEntity);
+            memory transformDefInputs = TransformLibrary
+                .getTransformInputsForAccount(
+                    _gameRegistry,
+                    account,
+                    params.transformEntity
+                );
 
         // Check inputs required against user balance
         uint256 defTokenId;

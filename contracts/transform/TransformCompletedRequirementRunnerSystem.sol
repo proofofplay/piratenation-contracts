@@ -21,7 +21,9 @@ uint256 constant ID = uint256(
  * @title TransformCompletedRequirementRunnerSystem
  * @dev Handles the execution of transforms based on the completions of the previous transforms
  */
-contract TransformCompletedRequirementRunnerSystem is BaseTransformRunnerSystem {
+contract TransformCompletedRequirementRunnerSystem is
+    BaseTransformRunnerSystem
+{
     /** ERRORS */
 
     /** PUBLIC */
@@ -41,7 +43,7 @@ contract TransformCompletedRequirementRunnerSystem is BaseTransformRunnerSystem 
     function startTransform(
         TransformInstanceComponentLayout memory,
         uint256,
-        TransformParams calldata params
+        TransformParams calldata
     )
         external
         view
@@ -77,7 +79,11 @@ contract TransformCompletedRequirementRunnerSystem is BaseTransformRunnerSystem 
     function isTransformCompleteable(
         TransformInstanceComponentLayout memory transformInstance
     ) external view override returns (bool) {
-        return _areRequirementsFulfilled(transformInstance.account, transformInstance.transformEntity);
+        return
+            _areRequirementsFulfilled(
+                transformInstance.account,
+                transformInstance.transformEntity
+            );
     }
 
     /**
@@ -102,22 +108,26 @@ contract TransformCompletedRequirementRunnerSystem is BaseTransformRunnerSystem 
         address account,
         uint256 transformEntity
     ) internal view returns (bool) {
-        TransformCompletedRequirementConfigComponentLayout memory config = TransformCompletedRequirementConfigComponent(
-                _gameRegistry.getComponent(TRANSFORM_COMPLETED_REQUIREMENT_COMPONENT_ID)
-            ).getLayoutValue(
-                transformEntity
-            );
+        TransformCompletedRequirementConfigComponentLayout
+            memory config = TransformCompletedRequirementConfigComponent(
+                _gameRegistry.getComponent(
+                    TRANSFORM_COMPLETED_REQUIREMENT_COMPONENT_ID
+                )
+            ).getLayoutValue(transformEntity);
 
         for (uint256 i = 0; i < config.entityRequirements.length; i++) {
             uint256 entityRequirement = config.entityRequirements[i];
             uint32 countRequirement = config.countRequirements[i];
-            
-            if (TransformLibrary
+
+            if (
+                TransformLibrary
                     .getAccountTransformData(
                         _gameRegistry,
                         account,
                         entityRequirement
-                    ).numCompletions < countRequirement) {
+                    )
+                    .numCompletions < countRequirement
+            ) {
                 return false;
             }
         }

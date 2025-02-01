@@ -53,6 +53,7 @@ struct DungeonNode {
     uint256 nodeId;
     uint256[] enemies;
     ILootSystemV2.Loot[] loots;
+    uint256 lootEntity;
 }
 
 struct DungeonTrigger {

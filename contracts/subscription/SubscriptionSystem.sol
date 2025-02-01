@@ -101,6 +101,25 @@ contract SubscriptionSystem is
         );
     }
 
+    /**
+     * @dev Get the expiration time of a subscription
+     * @param subscriptionType Type of subscription to check
+     * @param account Address of the account to check
+     */
+    function getSubscriptionExpirationTime(
+        uint256 subscriptionType,
+        address account
+    ) public view override returns (uint32) {
+        uint256 accountSubEntity = EntityLibrary.accountSubEntity(
+            account,
+            subscriptionType
+        );
+        return
+            ExpiresAtComponent(
+                _gameRegistry.getComponent(EXPIRES_AT_COMPONENT_ID)
+            ).getValue(accountSubEntity);
+    }
+
     /** INTERNAL */
 
     /**

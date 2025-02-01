@@ -23,6 +23,8 @@ import {IAccountXpSystem, BASE_ACCOUNT_SKILL_ID, ID as ACCOUNT_XP_SYSTEM_ID} fro
 import {ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {TransferLibrary, TransferStatus} from "../trade/TransferLibrary.sol";
+import {ISubscriptionSystem, ID as SUBSCRIPTION_SYSTEM_ID, VIP_SUBSCRIPTION_TYPE} from "../subscription/ISubscriptionSystem.sol";
+import {VipLootEntityReferenceComponent, ID as VIP_LOOT_ENTITY_REFERENCE_COMPONENT_ID} from "../generated/components/VipLootEntityReferenceComponent.sol";
 
 import {BanComponent, ID as BAN_COMPONENT_ID} from "../generated/components/BanComponent.sol";
 import {Banned} from "../ban/BanSystem.sol";
@@ -305,7 +307,7 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
             _grantLootComplete(
                 request,
                 randomNumber,
-                _getDungeonNode(request.node).loots,
+                _getUserDungeonNodeLoots(request.node, request.account),
                 ILootSystemV2(_gameRegistry.getSystem(LOOT_SYSTEM_V2_ID))
             );
 
@@ -488,8 +490,38 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
                 loots: LootArrayComponentLibrary.convertLootEntityArrayToLoot(
                     _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID),
                     encounter.lootEntity
-                )
+                ),
+                lootEntity: encounter.lootEntity
             });
+    }
+
+    /**
+     * @dev Internal function used to pull the loots for a dungeon node for a user based on their VIP status.
+     */
+    function _getUserDungeonNodeLoots(
+        uint256 encounterEntity,
+        address account
+    ) internal view returns (ILootSystemV2.Loot[] memory) {
+        DungeonNode memory node = _getDungeonNode(encounterEntity);
+        ILootSystemV2.Loot[] memory loots = node.loots;
+        // Handle VIP loot
+        bool hasActiveVipSub = ISubscriptionSystem(
+            _getSystem(SUBSCRIPTION_SYSTEM_ID)
+        ).checkHasActiveSubscription(VIP_SUBSCRIPTION_TYPE, account);
+        if (hasActiveVipSub) {
+            uint256 vipLootEntity = VipLootEntityReferenceComponent(
+                _gameRegistry.getComponent(
+                    VIP_LOOT_ENTITY_REFERENCE_COMPONENT_ID
+                )
+            ).getValue(node.lootEntity);
+            if (vipLootEntity != 0) {
+                loots = LootArrayComponentLibrary.convertLootEntityArrayToLoot(
+                    _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID),
+                    vipLootEntity
+                );
+            }
+        }
+        return loots;
     }
 
     function _generateTransferReceipt(
@@ -538,8 +570,10 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
         ILootSystemV2 lootSystem = ILootSystemV2(
             _gameRegistry.getSystem(LOOT_SYSTEM_V2_ID)
         );
-        ILootSystemV2.Loot[] memory loots = _getDungeonNode(request.node).loots;
-
+        ILootSystemV2.Loot[] memory loots = _getUserDungeonNodeLoots(
+            request.node,
+            request.account
+        );
         // Validate loots; returns true if VRF required.
         if (lootSystem.validateLoots(loots)) {
             // Generate a random number for the VRF request and

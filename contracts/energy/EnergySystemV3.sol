@@ -4,24 +4,26 @@ pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {IGameItems, ID as GAME_ITEMS_ID} from "../tokens/gameitems/IGameItems.sol";
 
+import "../GameRegistryConsumerUpgradeable.sol";
+
+import {EntityLibrary} from "../core/EntityLibrary.sol";
+import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
+
+import {IGameItems, ID as GAME_ITEMS_ID} from "../tokens/gameitems/IGameItems.sol";
 import {MANAGER_ROLE, GAME_NFT_CONTRACT_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {ID as PIRATE_NFT_ID} from "../tokens/PirateNFTL2.sol";
 import {ID as STARTER_PIRATE_NFT_ID} from "../tokens/starterpiratenft/StarterPirateNFT.sol";
-import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
+import {ISubscriptionSystem, ID as SUBSCRIPTION_SYSTEM_ID, VIP_SUBSCRIPTION_TYPE} from "../subscription/ISubscriptionSystem.sol";
 
-import {IEnergySystemV3, ID} from "./IEnergySystem.sol";
-
-import {EntityLibrary} from "../core/EntityLibrary.sol";
-import "../GameRegistryConsumerUpgradeable.sol";
 import {EnergyComponent, Layout as EnergyComponentLayout, ID as ENERGY_COMPONENT_ID} from "../generated/components/EnergyComponent.sol";
 import {Uint256Component, ID as Uint256ComponentId} from "../generated/components/Uint256Component.sol";
 import {StaticEntityListComponent, ID as STATIC_ENTITY_LIST_COMPONENT_ID} from "../generated/components/StaticEntityListComponent.sol";
 import {EnergyPackCountComponent, ID as ENERGY_PACK_COUNT_COMPONENT_ID} from "../generated/components/EnergyPackCountComponent.sol";
 import {EnergyPackComponent, Layout as EnergyPackComponentLayout, ID as ENERGY_PACK_COMPONENT_ID} from "../generated/components/EnergyPackComponent.sol";
 import {EnergyProvidedComponent, Layout as EnergyProvidedComponentLayout, ID as ENERGY_PROVIDED_COMPONENT_ID} from "../generated/components/EnergyProvidedComponent.sol";
-import {ID as LOOT_ARRAY_COMPONENT_ID} from "../generated/components/LootArrayComponent.sol";
+import {ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
+import {IEnergySystemV3, ID} from "./IEnergySystem.sol";
 
 // Globals used by this contract
 
@@ -38,15 +40,22 @@ uint256 constant DAILY_ENERGY_AMOUNT_ID = uint256(
 // Daily energy regen time value
 uint256 constant DAILY_ENERGY_REGEN_SECS = 3600;
 
-// GameGlobals key for the daily energy regen amount per time value of DAILY_ENERGY_REGEN_SECS
+// GameGlobals key for daily energy regen amount : 6.25 ether per 3600 seconds (1 hour)
 uint256 constant DAILY_ENERGY_REGEN_AMOUNT_ID = uint256(
     keccak256("game.piratenation.global.daily_energy_regen_amount")
 );
 
+// GameGlobals key for daily energy amount regen for VIP users
+uint256 constant VIP_DAILY_ENERGY_REGEN_AMOUNT_ID = uint256(
+    keccak256("game.piratenation.global.vip_daily_energy_regen_amount")
+);
+
+// GameGlobals key for amount of energy earnable past the max energy
 uint256 constant MAX_ENERGY_EARNABLE_ID = uint256(
     keccak256("game.piratenation.global.max_energy_earnable")
 );
 
+// GameGlobals key for rate at which max earnable energy is regenerated. 1 ether per 3600 seconds (1 hour)
 uint256 constant ENERGY_EARNABLE_RATE = uint256(
     keccak256("game.piratenation.global.energy_earnable_rate")
 );
@@ -228,7 +237,7 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
 
         currentEnergy = _energyForEntity(entity);
         maxEnergy = _maxEnergy(entity);
-        energyRegenPerSecond = _energyRegenPerSecond();
+        energyRegenPerSecond = _energyRegenPerSecond(entity);
         currentEnergyEarnable = _energyEarnableForEntity(entity);
         earnableRegenPerSecond = _energyEarnableRegenPerSecond();
         maxEnergyEarnable = _maxEnergyEarnable();
@@ -266,14 +275,18 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
         EnergyPackComponentLayout memory energyPackData = EnergyPackComponent(
             _gameRegistry.getComponent(ENERGY_PACK_COMPONENT_ID)
         ).getLayoutValue(energyPackEntity);
-        if (energyPackData.energyAmount == 0) {
+        if (
+            energyPackData.energyAmount == 0 || energyPackData.lootEntity == 0
+        ) {
             revert NotAvailable();
         }
         // Handle fee
-        LootArrayComponentLibrary.burnLootArray(
-            _gameRegistry.getComponent(LOOT_ARRAY_COMPONENT_ID),
-            caller,
-            energyPackData.lootEntity
+        LootArrayComponentLibrary.burnV2Loot(
+            LootArrayComponentLibrary.convertLootEntityArrayToLoot(
+                _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID),
+                energyPackData.lootEntity
+            ),
+            caller
         );
         // Grant the energy needed
         _grantEnergy(
@@ -432,17 +445,57 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
                 .getValue(DAILY_ENERGY_AMOUNT_ID);
     }
 
-    function _energyRegenPerSecond() internal view returns (uint256) {
-        // Get daily energy regeneration amount (ex: 6.25)
-        uint256 dailyEnergyRegenAmount = Uint256Component(
+    function _energyRegenPerSecond(
+        uint256 entity
+    ) internal view returns (uint256) {
+        Uint256Component uint256Component = Uint256Component(
             _gameRegistry.getComponent(Uint256ComponentId)
-        ).getValue(DAILY_ENERGY_REGEN_AMOUNT_ID);
+        );
+        // Get daily energy regeneration amount (ex: 6.25)
+        // Check if user has VIP subscription
+        uint256 dailyEnergyRegenAmount = ISubscriptionSystem(
+            _getSystem(SUBSCRIPTION_SYSTEM_ID)
+        ).checkHasActiveSubscription(
+                VIP_SUBSCRIPTION_TYPE,
+                EntityLibrary.entityToAddress(entity)
+            )
+            ? uint256Component.getValue(VIP_DAILY_ENERGY_REGEN_AMOUNT_ID)
+            : uint256Component.getValue(DAILY_ENERGY_REGEN_AMOUNT_ID);
 
         // Return ether energy unit per hour
         return dailyEnergyRegenAmount / DAILY_ENERGY_REGEN_SECS;
     }
 
+    /**
+     * @dev Get the energy regen per second for a standard user, not VIP
+     */
+    function _energyRegenPerSecondStandard() internal view returns (uint256) {
+        // Return ether energy unit per hour
+        return
+            Uint256Component(_gameRegistry.getComponent(Uint256ComponentId))
+                .getValue(DAILY_ENERGY_REGEN_AMOUNT_ID) /
+            DAILY_ENERGY_REGEN_SECS;
+    }
+
+    /**
+     * @dev Get the energy regen per second for a VIP user
+     */
+    function _energyRegenPerSecondVip() internal view returns (uint256) {
+        // Return ether energy unit per hour
+        return
+            Uint256Component(_gameRegistry.getComponent(Uint256ComponentId))
+                .getValue(VIP_DAILY_ENERGY_REGEN_AMOUNT_ID) /
+            DAILY_ENERGY_REGEN_SECS;
+    }
+
+    /**
+     * @dev Get the current energy for a given entity
+     * @param entity Entity (wallet) to get energy data for
+     */
     function _energyForEntity(uint256 entity) internal view returns (uint256) {
+        ISubscriptionSystem subscriptionSystem = ISubscriptionSystem(
+            _getSystem(SUBSCRIPTION_SYSTEM_ID)
+        );
         EnergyComponent energyComponent = EnergyComponent(
             _gameRegistry.getComponent(ENERGY_COMPONENT_ID)
         );
@@ -461,11 +514,42 @@ contract EnergySystemV3 is IEnergySystemV3, GameRegistryConsumerUpgradeable {
         // Get the current time, subtract the last spend-time, and multiply by the energyRegPerSecond to convert it to energy, then add any energy that remained from last time
         uint256 energyAccumulated = lastEnergyAmount +
             (block.timestamp - lastSpendTimestamp) *
-            _energyRegenPerSecond();
-        if (energyAccumulated > maxEnergy) {
+            _energyRegenPerSecond(entity);
+        uint32 subExpiresAtTime = subscriptionSystem
+            .getSubscriptionExpirationTime(
+                VIP_SUBSCRIPTION_TYPE,
+                EntityLibrary.entityToAddress(entity)
+            );
+        // If user has VIP subscription or lastSpendTime is past vip expiration time, use constant regen rate
+        if (
+            subscriptionSystem.checkHasActiveSubscription(
+                VIP_SUBSCRIPTION_TYPE,
+                EntityLibrary.entityToAddress(entity)
+            ) || lastSpendTimestamp > subExpiresAtTime
+        ) {
+            if (energyAccumulated > maxEnergy) {
+                return maxEnergy;
+            } else {
+                return energyAccumulated;
+            }
+        }
+        // Return max if player does not have VIP subscription and last played time is more than 24 hours ago
+        if ((block.timestamp - lastSpendTimestamp) / 1 hours > 24) {
+            return maxEnergy;
+        }
+        // Calculate vip time energy from last spend time to vip expiration time
+        uint256 vipEnergyTotal = (subExpiresAtTime - lastSpendTimestamp) *
+            _energyRegenPerSecondVip();
+        // Calculate standard time energy from vip expiration time to current time
+        uint256 standardEnergyTotal = (block.timestamp - subExpiresAtTime) *
+            _energyRegenPerSecondStandard();
+        uint256 totalEnergy = vipEnergyTotal +
+            standardEnergyTotal +
+            lastEnergyAmount;
+        if (totalEnergy > maxEnergy) {
             return maxEnergy;
         } else {
-            return energyAccumulated;
+            return totalEnergy;
         }
     }
 
