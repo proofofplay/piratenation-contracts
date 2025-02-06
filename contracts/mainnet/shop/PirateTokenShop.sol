@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/draft-IERC20Permit.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -23,7 +24,7 @@ bytes32 constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
 
 // Ability to burn tokens
 // NOTE: MUST BE SET BETWEEN 1 and 100;
-uint256 constant BURN_PERCENTAGE = 50;
+uint256 constant BURN_PERCENTAGE = 10;
 
 // Interface for a burnable token
 interface IERC20Burnable {
@@ -128,6 +129,8 @@ contract PirateTokenShop is
         uint32 startTime;
         // @notice end time of the SKU list
         uint32 endTime;
+        // @notice Founder Pirate holders discount
+        uint256 foundersDiscount;
     }
 
     // @notice The mapping of SKU entities to their Sku struct
@@ -142,6 +145,9 @@ contract PirateTokenShop is
     // @notice The mapping of user addresses to sku id to their purchase count
     mapping(address => mapping(uint256 => uint256))
         public userToSkuIdToPurchaseCount;
+
+    // @notice Founders Pirate token contract address
+    address public foundersPirateContract;
 
     // @notice Emitted when a purchase is made
     event Purchase(
@@ -206,6 +212,16 @@ contract PirateTokenShop is
     }
 
     /**
+     * @dev Update the founders pirate contract address
+     * @param _foundersPirateContract the address of the founders pirate contract
+     */
+    function updateFoundersPirateContract(
+        address _foundersPirateContract
+    ) external onlyRole(MANAGER_ROLE) {
+        foundersPirateContract = _foundersPirateContract;
+    }
+
+    /**
      * @dev Withdraw the tokens from the contract
      * @param amount The amount of tokens to withdraw
      * @notice The funds reciever is the address that receives the funds from the purchases
@@ -233,7 +249,6 @@ contract PirateTokenShop is
 
         for (uint256 i = 0; i < skuEntities.length; i++) {
             skus[skuEntities[i]] = skuValues[i];
-            //auctionable[skuEntities[i]] = isAuction[i];
         }
     }
 
@@ -506,66 +521,61 @@ contract PirateTokenShop is
         uint256 discount,
         bool stakeOnlyPurchase
     ) internal returns (uint256, uint256) {
-        if (
-            skuEntities.length == 0 || skuEntities.length != quantities.length
-        ) {
+        if (skuEntities.length != 1 || quantities.length != 1) {
             revert InvalidInputs();
         }
 
-        uint256 total = 0;
         purchaseId++;
 
-        for (uint256 i = 0; i < skuEntities.length; i++) {
-            if (i > 0 && skuEntities[i] <= skuEntities[i - 1]) {
-                revert SkusMustBeInOrder();
-            }
-            if (quantities[i] == 0) {
-                revert InvalidInputs();
-            }
-
-            // if (auctionable[skuEntities[i]]) {
-            //     revert MustBePurchasedByAuction();
-            // }
-
-            Sku storage sku = skus[skuEntities[i]];
-            // Enforce start time if needed
-            if (sku.startTime > 0 && block.timestamp < sku.startTime) {
-                revert NotStartedYet();
-            }
-            // Enforce end time if needed
-            if (sku.endTime > 0 && block.timestamp > sku.endTime) {
-                revert ExpiredListing();
-            }
-            // Enforce stakeOnly purchases
-            if (sku.stakeOnly == true && stakeOnlyPurchase == false) {
-                revert MustBePurchasedByStake();
-            }
-            // If listing is marked as unlimited, we can purchase as many as we want
-            // Otherwise, we need to check if we have enough quantity to purchase
-            if (!sku.unlimited) {
-                if (quantities[i] > sku.quantity) {
-                    revert ItemSoldOut();
-                }
-                if (quantities[i] > itemsLimit) {
-                    revert MaxItemsExceeded();
-                }
-                // Reduce quantity of Sku
-                sku.quantity = sku.quantity - uint32(quantities[i]);
-                // Enforce max purchases per wallet allowed and increment purchase count
-                if (
-                    userToSkuIdToPurchaseCount[purchaser][skuEntities[i]] +
-                        quantities[i] >
-                    sku.maxPurchaseByAccount
-                ) {
-                    revert MaxPurchasesExceeded();
-                }
-                userToSkuIdToPurchaseCount[purchaser][
-                    skuEntities[i]
-                ] += quantities[i];
-            }
-            total += sku.price * quantities[i];
+        if (quantities[0] == 0) {
+            revert InvalidInputs();
         }
 
+        Sku storage sku = skus[skuEntities[0]];
+        // Enforce start time if needed
+        if (sku.startTime > 0 && block.timestamp < sku.startTime) {
+            revert NotStartedYet();
+        }
+        // Enforce end time if needed
+        if (sku.endTime > 0 && block.timestamp > sku.endTime) {
+            revert ExpiredListing();
+        }
+        // Enforce stakeOnly purchases
+        if (sku.stakeOnly == true && stakeOnlyPurchase == false) {
+            revert MustBePurchasedByStake();
+        }
+        // Apply founders discount if applicable
+        if (
+            stakeOnlyPurchase == true &&
+            sku.foundersDiscount > 0 &&
+            IERC721(foundersPirateContract).balanceOf(purchaser) > 0
+        ) {
+            discount += sku.foundersDiscount;
+        }
+        // If listing is marked as unlimited, we can purchase as many as we want
+        // Otherwise, we need to check if we have enough quantity to purchase
+        if (!sku.unlimited) {
+            if (quantities[0] > sku.quantity) {
+                revert ItemSoldOut();
+            }
+            if (quantities[0] > itemsLimit) {
+                revert MaxItemsExceeded();
+            }
+            // Reduce quantity of Sku
+            sku.quantity = sku.quantity - uint32(quantities[0]);
+            // Enforce max purchases per wallet allowed and increment purchase count
+            if (
+                userToSkuIdToPurchaseCount[purchaser][skuEntities[0]] +
+                    quantities[0] >
+                sku.maxPurchaseByAccount
+            ) {
+                revert MaxPurchasesExceeded();
+            }
+            userToSkuIdToPurchaseCount[purchaser][skuEntities[0]] += quantities[
+                0
+            ];
+        }
+        uint256 total = sku.price * quantities[0];
         //apply price index
         total = (total * priceIndex) / 100;
 
@@ -580,8 +590,6 @@ contract PirateTokenShop is
         // Burn percentage of total;
         IERC20Burnable(address(token)).burn((total * BURN_PERCENTAGE) / 100);
 
-        // Purchase is successful! Emit event for Oracle to pick up deliver on client chain
-        // And helpful for accounting
         emit Purchase(
             purchaser,
             purchaseId,
