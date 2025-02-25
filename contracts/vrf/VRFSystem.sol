@@ -91,8 +91,11 @@ contract VRFSystem is IVRFSystemOracle, GameRegistryConsumerUpgradeable
          uint256 traceId = requestIdToTraceId[id];
          delete callbacks[id];
 
-         // note: we add requestId here to add entropy so every call is not the same.
-         callbackAddress.randomNumberCallback(id, randomNumber + requestId);
+         // note: keccak requestId here to add entropy so every call is not the same.
+         uint256 keccakRandomNumber = uint256(
+             keccak256(abi.encode(randomNumber, requestId))
+         );
+         callbackAddress.randomNumberCallback(id, keccakRandomNumber);
 
          emit RandomNumberDelivered(id, address(callbackAddress), traceId, roundNumber, randomNumber);
      }

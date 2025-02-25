@@ -40,7 +40,7 @@ library VipTransformInputComponentStorage {
 
 /**
  * @title VipTransformInputComponent
- * @dev A set of inputs for a transform
+ * @dev A set of inputs to override TransformInputComponent if the user has VIP
  */
 contract VipTransformInputComponent is BaseStorageComponentV2 {
     /** SETUP **/

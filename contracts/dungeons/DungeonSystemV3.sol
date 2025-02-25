@@ -7,7 +7,7 @@ import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 
 import {ILootSystemV2, ID as LOOT_SYSTEM_V2_ID} from "../loot/ILootSystemV2.sol";
-import {VRF_SYSTEM_ROLE} from "../Constants.sol";
+import {VRF_SYSTEM_ROLE, GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {EndBattleParams, IDungeonBattleSystemV2, ID as DUNGEON_BATTLE_SYSTEM_ID} from "./IDungeonBattleSystemV2.sol";
 import {IDungeonProgressSystem, ID as DUNGEON_PROGRESS_SYSTEM_ID, DungeonNodeProgressState} from "./IDungeonProgressSystem.sol";
 import {StartAndEndDungeonBattleParams, StartAndEndValidatedDungeonBattleParams, StartDungeonBattleParams, EndDungeonBattleParams, IDungeonSystemV3, DungeonMap, DungeonNode, DungeonTrigger} from "./IDungeonSystemV3.sol";
@@ -212,7 +212,13 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
      */
     function startDungeonBattle(
         StartDungeonBattleParams calldata params
-    ) external nonReentrant whenNotPaused returns (uint256) {
+    )
+        external
+        nonReentrant
+        whenNotPaused
+        onlyRole(GAME_LOGIC_CONTRACT_ROLE)
+        returns (uint256)
+    {
         address account = _getPlayerAccount(_msgSender());
         return _startDungeonBattle(account, params);
     }
@@ -222,7 +228,7 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
      */
     function endDungeonBattle(
         EndDungeonBattleParams calldata params
-    ) external nonReentrant whenNotPaused {
+    ) external nonReentrant whenNotPaused onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         address account = _getPlayerAccount(_msgSender());
         _endDungeonBattle(account, params);
     }
@@ -233,7 +239,7 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
      */
     function startAndEndDungeonBattle(
         StartAndEndDungeonBattleParams calldata params
-    ) external nonReentrant whenNotPaused {
+    ) external nonReentrant whenNotPaused onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         address account = _getPlayerAccount(_msgSender());
         _startAndEndDungeonBattle(account, params);
     }
