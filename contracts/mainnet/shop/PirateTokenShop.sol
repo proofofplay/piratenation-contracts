@@ -13,6 +13,8 @@ import {ContextUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/Cont
 //todo: should we upgrade OZ for this to be trasient? MV think yes.
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
+import {IShopReceiptNFT} from "./IShopReceiptNFT.sol";
+
 // Listings Role - Can Set Pricing, Quantity of SKUs
 bytes32 constant LISTINGS_ROLE = keccak256("LISTINGS_ROLE");
 
@@ -78,6 +80,12 @@ error ExpiredListing();
 
 // @notice SKU not started yet
 error NotStartedYet();
+
+// @notice Shop Receipt NFT not set
+error ShopReceiptNFTNotSet();
+
+// @notice Invalid ETH amount
+error InvalidETHAmount(uint256 expected, uint256 actual);
 
 /**
  * The Pirate Token shop is a contract that allows users to purchase items using an ERC20 token.
@@ -149,6 +157,9 @@ contract PirateTokenShop is
     // @notice Founders Pirate token contract address
     address public foundersPirateContract;
 
+    // @notice The address of the shop receipt NFT
+    address public shopReceiptNFTContract;
+
     // @notice Emitted when a purchase is made
     event Purchase(
         address indexed purchaser,
@@ -219,6 +230,16 @@ contract PirateTokenShop is
         address _foundersPirateContract
     ) external onlyRole(MANAGER_ROLE) {
         foundersPirateContract = _foundersPirateContract;
+    }
+
+    /**
+     * @dev Set the shop receipt NFT
+     * @param _shopReceiptNFT The address of the shop receipt NFT
+     */
+    function updateShopReceiptNFTContract(
+        address _shopReceiptNFT
+    ) external onlyRole(MANAGER_ROLE) {
+        shopReceiptNFTContract = _shopReceiptNFT;
     }
 
     /**
@@ -450,6 +471,7 @@ contract PirateTokenShop is
                 skuEntities,
                 quantities,
                 stakingDiscount,
+                true,
                 true
             );
     }
@@ -470,7 +492,49 @@ contract PirateTokenShop is
         uint256[] calldata skuEntities,
         uint256[] calldata quantities
     ) external whenNotPaused returns (uint256, uint256) {
-        return _purchase(_msgSender(), skuEntities, quantities, 0, false);
+        return _purchase(_msgSender(), skuEntities, quantities, 0, false, true);
+    }
+
+    /**
+     * @dev Purchase from the shop with Crossmint, pay with token
+     *
+     * @param purchaser The address of the purchaser
+     * @param sku The SKU entity
+     * @param quantity The quantity of the SKU to purchase
+     */
+    function purchaseWithCrossmint(
+        address purchaser,
+        uint256 sku,
+        uint256 quantity
+    ) external whenNotPaused {
+        uint256[] memory skuEntities = new uint256[](1);
+        skuEntities[0] = sku;
+
+        uint256[] memory quantities = new uint256[](1);
+        quantities[0] = quantity;
+
+        _purchase(purchaser, skuEntities, quantities, 0, false, true);
+    }
+
+    /**
+     * @dev Purchase from the shop with Crossmint, pay with ETH
+     *
+     * @param purchaser The address of the purchaser
+     * @param sku The SKU entity
+     * @param quantity The quantity of the SKU to purchase
+     */
+    function purchaseWithCrossmintETH(
+        address purchaser,
+        uint256 sku,
+        uint256 quantity
+    ) external payable whenNotPaused {
+        uint256[] memory skuEntities = new uint256[](1);
+        skuEntities[0] = sku;
+
+        uint256[] memory quantities = new uint256[](1);
+        quantities[0] = quantity;
+
+        _purchase(purchaser, skuEntities, quantities, 0, false, false);
     }
 
     /**
@@ -509,17 +573,18 @@ contract PirateTokenShop is
             s
         );
 
-        return _purchase(_msgSender(), skuEntities, quantities, 0, false);
+        return _purchase(_msgSender(), skuEntities, quantities, 0, false, true);
     }
 
     /** INTERNAL */
 
     function _purchase(
         address purchaser,
-        uint256[] calldata skuEntities,
-        uint256[] calldata quantities,
+        uint256[] memory skuEntities,
+        uint256[] memory quantities,
         uint256 discount,
-        bool stakeOnlyPurchase
+        bool stakeOnlyPurchase,
+        bool isTokenPayment
     ) internal returns (uint256, uint256) {
         if (skuEntities.length != 1 || quantities.length != 1) {
             revert InvalidInputs();
@@ -544,6 +609,12 @@ contract PirateTokenShop is
         if (sku.stakeOnly == true && stakeOnlyPurchase == false) {
             revert MustBePurchasedByStake();
         }
+
+        // Make sure receipt NFT is set
+        if (shopReceiptNFTContract == address(0)) {
+            revert ShopReceiptNFTNotSet();
+        }
+
         // Apply founders discount if applicable
         if (
             stakeOnlyPurchase == true &&
@@ -584,12 +655,24 @@ contract PirateTokenShop is
             total = (total * (100 - discount)) / 100;
         }
 
-        // Transfer directly from the caller to this contract
-        token.transferFrom(msg.sender, address(this), total);
+        if (isTokenPayment) {
+            // Transfer directly from the caller to this contract
+            token.transferFrom(msg.sender, address(this), total);
 
-        // Burn percentage of total;
-        IERC20Burnable(address(token)).burn((total * BURN_PERCENTAGE) / 100);
+            // Burn percentage of total;
+            IERC20Burnable(address(token)).burn(
+                (total * BURN_PERCENTAGE) / 100
+            );
+        } else {
+            // TODO: Implement swap
 
+            // Verify the amount is correct
+            if (msg.value != total) {
+                revert InvalidETHAmount(total, msg.value);
+            }
+        }
+
+        // Emit purchase event
         emit Purchase(
             purchaser,
             purchaseId,
@@ -598,6 +681,9 @@ contract PirateTokenShop is
             total,
             discount
         );
+
+        // Mint NFT receipt, do this after the purchase event is emitted intentionally
+        IShopReceiptNFT(shopReceiptNFTContract).mint(purchaser, purchaseId);
 
         return (purchaseId, total);
     }

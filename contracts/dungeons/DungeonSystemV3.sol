@@ -300,6 +300,28 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
     }
 
     /**
+     * A read call to check if a dungeon battle can be started.
+     * @param params Data for an started and ended battle.
+     */
+    function canStartDungeonBattle(
+        StartDungeonBattleParams calldata params,
+        address operatorWallet
+    ) external view returns (bool) {
+        address account = _getPlayerAccount(operatorWallet);
+        if (
+            BanComponent(_gameRegistry.getComponent(BAN_COMPONENT_ID)).getValue(
+                EntityLibrary.addressToEntity(account)
+            ) == true
+        ) {
+            revert Banned();
+        }
+
+        // throws errors if it can't be started.
+        _validateStartDungeonBattle(account, params);
+        return true;
+    }
+
+    /**
      * @inheritdoc GameRegistryConsumerUpgradeable
      */
     function randomNumberCallback(
@@ -345,6 +367,24 @@ contract DungeonSystemV3 is IDungeonSystemV3, GameRegistryConsumerUpgradeable {
      * @inheritdoc IDungeonSystemV3
      */
     function isDungeonMapCompleteForAccount(
+        address account,
+        uint256 dungeonScheduledStart
+    ) external view returns (bool) {
+        DungeonTrigger
+            memory dungeonTrigger = _getDungeonTriggerByStartTimestamp(
+                dungeonScheduledStart
+            );
+        (
+            uint256 currentNode,
+            DungeonNodeProgressState currentNodeState
+        ) = _getCurrentPlayerState(account, dungeonScheduledStart);
+        return
+            currentNode ==
+            _getDungeonMap(dungeonTrigger.dungeonMapEntity).nodes.length &&
+            currentNodeState == DungeonNodeProgressState.VICTORY;
+    }
+
+    function isDungeon(
         address account,
         uint256 dungeonScheduledStart
     ) external view returns (bool) {
