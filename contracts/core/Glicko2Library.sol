@@ -137,6 +137,15 @@ library Glicko2Library {
             int256 newDeviation,
             int256 newVolatility
         ) = calculateUpdatedRating(params);
+        // Glicko-2's formulas in their pure form might calculate a tiny negative adjustment or zero adjustment for extreme mismatches
+        // Ensure winners always gain at least 1 point
+        if (outcome == 1 && newRating <= playerData.ratingScore) {
+            newRating = playerData.ratingScore + 1000; // +1 point minimum (scaled)
+        }
+        // Ensure losers always lose at least 1 point
+        if (outcome == 0 && newRating >= playerData.ratingScore) {
+            newRating = playerData.ratingScore - 1000; // -1 point minimum (scaled)
+        }
         return
             RatingUpdateResult({
                 newRating: newRating,
@@ -183,6 +192,9 @@ library Glicko2Library {
                 10000000;
             if (newDeviation > MAX_RATING_DEVIATION) {
                 newDeviation = MAX_RATING_DEVIATION;
+            }
+            if (newDeviation < MIN_RATING_DEVIATION) {
+                newDeviation = MIN_RATING_DEVIATION;
             }
 
             currentRatingDeviation = newDeviation;
@@ -253,7 +265,7 @@ library Glicko2Library {
             ((1000000 * 1000000) / inputs.v);
         // Calculate the new phi aka newRD == φ' = 1 / √(1/φ*² + 1/v)
         calc.newPhi = (1000000000) / sqrt(denominator);
-        // Ensure phi stays within bounds
+        // Ensure phi stays within bounds : optional
         // if (calc.newPhi < MIN_PHI_GLICKO2) {
         //     calc.newPhi = MIN_PHI_GLICKO2;
         // } else if (calc.newPhi > MAX_PHI_GLICKO2) {
@@ -273,7 +285,7 @@ library Glicko2Library {
         // Step 4: Convert back to original Glicko scale
         int256 newRating = INITIAL_RATING +
             ((calc.newMu * RATING_SCALE_FACTOR) / 10000000);
-        // Ensure new rating stays within bounds
+        // Ensure new rating stays within bounds : optional
         // if (newRating > MAX_GLICKO2_RATING) {
         //     newRating = MAX_GLICKO2_RATING;
         // } else if (newRating < MIN_GLICKO2_RATING) {
@@ -444,17 +456,7 @@ library Glicko2Library {
         int256 temp = (v * scoreDiff) / 1000000; // First scale down after v * scoreDiff
         int256 delta = (temp * g) / 1000000; // Then scale down after multiplying by g
 
-        // Add dampening factor based on expected outcome
-        // If e is very close to 0 or 1000000, reduce delta
-        int256 dampening = 1000000;
-        if (e < 100000) {
-            // Less than 10% chance
-            dampening = e * 10; // Reduce impact for very unlikely outcomes
-        } else if (e > 900000) {
-            // More than 90% chance
-            dampening = (1000000 - e) * 10; // Reduce impact for very likely outcomes
-        }
-        return (delta * dampening) / 1000000;
+        return delta;
     }
 
     /**
@@ -477,7 +479,10 @@ library Glicko2Library {
         // e is the expected outcome (between 0 and 1000000)
         // For a win: surprise = 1000000 - e (how unexpected was winning)
         // For a loss: surprise = e (how unexpected was losing)
-        int256 surprise = delta > 0 ? 1000000 - e : e;
+        int256 surprise = 0;
+        if (delta != 0) {
+            surprise = delta > 0 ? 1000000 - e : e;
+        }
 
         // Start with current volatility
         int256 newVolatility = volatility;
@@ -560,7 +565,7 @@ library Glicko2Library {
     function exp(int256 x) internal pure returns (int256) {
         // Limit to reasonable range to avoid overflow
         if (x > 20000000) return 1000000000000; // e^20 is very large
-        if (x < -20000000) return 0; // e^-20 is close to 0
+        if (x < -10000000) return 0; // e^-10 is close to 0
 
         // e^x = 1 + x + x^2/2! + x^3/3! + ... + x^n/n!
         int256 result = 1000000; // 1.0 scaled by 1000000

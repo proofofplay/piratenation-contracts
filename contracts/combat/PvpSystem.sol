@@ -33,6 +33,8 @@ uint256 constant PVP_LEAGUE_TROPHY_THRESHOLDS = uint256(
     keccak256("game.piratenation.global.pvp_league_trophy_thresholds")
 );
 
+/** STRUCTS **/
+
 /// @notice The result of a match
 struct MatchDataResult {
     int256 ratingScore;
@@ -44,6 +46,23 @@ struct MatchDataResult {
     address opponentAddress;
     string ipfsUrl;
 }
+
+/// @notice Input for trophy adjustment
+struct TrophyAdjustmentInput {
+    address playerAddress;
+    int256 ratingDifference;
+    uint256 seasonId;
+    uint8 outcome;
+}
+
+/// @notice The result of a trophy adjustment
+struct TrophyAdjustmentResult {
+    uint256 oldLeague;
+    uint256 newLeague;
+    uint256 trophyChange;
+}
+
+/** ERRORS **/
 
 /// @notice Error when no PvP season is set
 error NoPvpSeasonIdSet();
@@ -59,6 +78,14 @@ error InvalidRatingInputs();
 
 /// @notice Error when the game session ID is invalid
 error InvalidGameSessionId();
+
+/// @notice Error double report of a match
+error DoubleReport(address playerOneAddress, uint256 gameSessionId);
+
+/** EVENTS **/
+
+/// @notice Event when a match ends - no need to index opponent address as they will get their own event when they end their match
+event EndMatch(uint256 indexed gameSessionId, address indexed playerAddress, uint8 indexed outcome, address opponentAddress, string ipfsUrl);
 
 /**
  * @title PvP System
@@ -153,24 +180,23 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             _gameRegistry.getComponent(USER_PVP_DATA_COMPONENT_ID)
         ).setLayoutValue(playerSeasonAddressEntity, playerPvpData);
         // Now handle the trophy adjustment
-        (
-            uint256 oldLeague,
-            uint256 newLeague,
-            int256 trophyChange
-        ) = _handleTrophyAdjustment(
-                playerOneAddress,
-                (playerPvpData.matchmakingRating - oldRating) / 1000,
-                pvpSeasonId,
-                matchDataResult.outcome
+        TrophyAdjustmentResult memory trophyAdjustmentResult = _handleTrophyAdjustment(
+                TrophyAdjustmentInput({
+                    playerAddress: playerOneAddress,
+                    ratingDifference: (playerPvpData.matchmakingRating -
+                        oldRating) / 1000,
+                    seasonId: pvpSeasonId,
+                    outcome: matchDataResult.outcome
+                })
             );
         uint256[] memory lootGrantedToRecord;
         // Handle winner ranking up if they won and moved up a league
-        if (matchDataResult.outcome == VICTORY && newLeague > oldLeague) {
+        if (matchDataResult.outcome == VICTORY && trophyAdjustmentResult.newLeague > trophyAdjustmentResult.oldLeague) {
             lootGrantedToRecord = _handleRankedClaim(
                 playerOneAddress,
                 playerSeasonAddressEntity,
-                newLeague,
-                oldLeague
+                trophyAdjustmentResult.newLeague,
+                trophyAdjustmentResult.oldLeague
             );
         }
         // Store the battle summary
@@ -178,9 +204,11 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             matchDataResult,
             pvpSeasonId,
             playerOneAddress,
-            trophyChange,
+            trophyAdjustmentResult.trophyChange,
             lootGrantedToRecord
         );
+        // Emit the end match event
+        _emitEndMatch(matchDataResult.gameSessionId, playerOneAddress, matchDataResult.outcome, matchDataResult.opponentAddress, matchDataResult.ipfsUrl);
     }
 
     /**
@@ -250,7 +278,29 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         return _getUserLeague(userTrophyCount);
     }
 
+    /**
+     * Post the match results to the PvP system for Lobby matches. This does not grant any trophies or rating updates.
+     * @param playerOneAddress The address of the player
+     * @param matchDataResult The result of the match
+     */
+    function postLobbyMatchResult(address playerOneAddress, MatchDataResult memory matchDataResult) external onlyRole(PVP_VALIDATOR_ROLE) {
+        // Emit the end match event
+        _emitEndMatch(matchDataResult.gameSessionId, playerOneAddress, matchDataResult.outcome, matchDataResult.opponentAddress, matchDataResult.ipfsUrl);
+    }
+
     /** INTERNAL **/
+
+    /**
+     * Emit the end match event
+     * @param gameSessionId The ID of the game session
+     * @param playerAddress The address of the player
+     * @param outcome The outcome of the match
+     * @param opponentAddress The address of the opponent
+     * @param ipfsUrl The IPFS URL of the match
+     */
+    function _emitEndMatch(uint256 gameSessionId, address playerAddress, uint8 outcome, address opponentAddress, string memory ipfsUrl) internal {
+        emit EndMatch(gameSessionId, playerAddress, outcome, opponentAddress, ipfsUrl);
+    }
 
     /**
      * Initialize a player's PvP data if it doesn't exist or returns the existing data
@@ -265,7 +315,7 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     ) internal view returns (UserPvpDataComponentLayout memory) {
         UserPvpDataComponentLayout memory userPvpData = userPvpDataComponent
             .getLayoutValue(playerSeasonAddressEntity);
-        if (userPvpData.matchmakingRating == 0) {
+        if (userPvpData.matchmakingRatingLastUpdate == 0) {
             userPvpData.matchmakingRating = INITIAL_RATING;
             userPvpData.matchmakingRatingDeviation = INITIAL_DEVIATION;
             userPvpData.matchmakingRatingVolatility = INITIAL_VOLATILITY;
@@ -277,79 +327,99 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     /**
      * Handle the trophy adjustment for a win or loss, return old league and new league
      *
-     * @param playerAddress The address of the player
-     * @param ratingDifference The difference in rating whether rating increased or decreased
-     * @param outcome The outcome of the match
+     * @param trophyAdjustmentInput Contains the inputs for the trophy adjustment
      */
     function _handleTrophyAdjustment(
-        address playerAddress,
-        int256 ratingDifference,
-        uint256 seasonId,
-        uint8 outcome
-    ) internal returns (uint256, uint256, int256) {
+        TrophyAdjustmentInput memory trophyAdjustmentInput
+    ) internal returns (TrophyAdjustmentResult memory) {
         (address gameItemsAddress, uint256 seasonTrophyId) = EntityLibrary
             .entityToToken(
                 EntityBaseComponent(
                     _gameRegistry.getComponent(ENTITY_BASE_COMPONENT_ID)
-                ).getValue(seasonId)
+                ).getValue(trophyAdjustmentInput.seasonId)
             );
         if (seasonTrophyId == 0) {
             revert NoTrophyGameItemSet();
         }
         // Get the trophy count for the user
         uint256 currentTrophyCount = IGameItems(gameItemsAddress).balanceOf(
-            playerAddress,
+            trophyAdjustmentInput.playerAddress,
             seasonTrophyId
         );
 
         uint256 userCurrentLeague = _getUserLeague(currentTrophyCount);
-        if (outcome == VICTORY) {
-            // Use rating difference to determine how many trophies to award
-            IGameItems(gameItemsAddress).mint(
-                playerAddress,
-                seasonTrophyId,
-                uint256(Glicko2Library.abs(ratingDifference))
+        // Get any league data defined for the league
+        PvpLeagueDataComponentLayout memory leagueData = PvpLeagueDataComponent(
+            _gameRegistry.getComponent(PVP_LEAGUE_DATA_COMPONENT_ID)
+        ).getLayoutValue(
+                StaticEntityListComponent(
+                    _gameRegistry.getComponent(STATIC_ENTITY_LIST_COMPONENT_ID)
+                ).getValue(ID)[userCurrentLeague]
             );
-        } else if (outcome == DEFEAT) {
-            // Use rating difference to determine how many trophies to burn, if user in certain league then burn certain amount
-            // Match the user league to the league entity
-            // Get any league data defined for the league
-            PvpLeagueDataComponentLayout
-                memory leagueData = PvpLeagueDataComponent(
-                    _gameRegistry.getComponent(PVP_LEAGUE_DATA_COMPONENT_ID)
-                ).getLayoutValue(
-                        StaticEntityListComponent(
-                            _gameRegistry.getComponent(
-                                STATIC_ENTITY_LIST_COMPONENT_ID
-                            )
-                        ).getValue(ID)[userCurrentLeague]
-                    );
-            // Burn a defined amount of trophies if needed
-            if (leagueData.lossConstant != 0) {
-                ratingDifference = int256(leagueData.lossConstant);
+        uint256 trophyAmountToGrantOrBurn = uint256(
+            Glicko2Library.abs(trophyAdjustmentInput.ratingDifference)
+        );
+        if (trophyAdjustmentInput.outcome == VICTORY) {
+            // Enforce ceiling for win
+            if (
+                leagueData.winConstant != 0 &&
+                trophyAmountToGrantOrBurn > leagueData.winConstant
+            ) {
+                trophyAmountToGrantOrBurn = leagueData.winConstant;
+                trophyAdjustmentInput.ratingDifference = int256(
+                    leagueData.winConstant
+                );
             }
-            if (currentTrophyCount >= uint256(ratingDifference)) {
-                ratingDifference = int256(currentTrophyCount);
-            } else {
-                ratingDifference = int256(currentTrophyCount);
+            // Use rating difference to determine how many trophies to award
+            if(trophyAmountToGrantOrBurn > 0) {
+                IGameItems(gameItemsAddress).mint(
+                    trophyAdjustmentInput.playerAddress,
+                    seasonTrophyId,
+                    trophyAmountToGrantOrBurn
+                );
+            }
+        } else if (
+            trophyAdjustmentInput.outcome == DEFEAT && currentTrophyCount == 0
+        ) {
+            trophyAmountToGrantOrBurn = 0;
+            trophyAdjustmentInput.ratingDifference = 0;
+        } else if (
+            trophyAdjustmentInput.outcome == DEFEAT && currentTrophyCount > 0
+        ) {
+            // Use rating difference to determine how many trophies to burn, if user in certain league then burn certain amount
+            // Enforce ceiling for loss
+            if (
+                leagueData.lossConstant != 0 &&
+                trophyAmountToGrantOrBurn > leagueData.lossConstant
+            ) {
+                trophyAdjustmentInput.ratingDifference = int256(
+                    leagueData.lossConstant
+                );
+                trophyAmountToGrantOrBurn = leagueData.lossConstant;
+            }
+            if (currentTrophyCount <= trophyAmountToGrantOrBurn) {
+                trophyAdjustmentInput.ratingDifference = int256(
+                    currentTrophyCount
+                );
+                trophyAmountToGrantOrBurn = currentTrophyCount;
             }
             IGameItems(gameItemsAddress).burn(
-                playerAddress,
+                trophyAdjustmentInput.playerAddress,
                 seasonTrophyId,
-                uint256(Glicko2Library.abs(ratingDifference))
+                trophyAmountToGrantOrBurn
             );
         }
-        // Return the old league and new league
-        return (
-            userCurrentLeague,
-            _getUserLeague(
+        // Return the old league and new league and trophy change
+        return TrophyAdjustmentResult({
+            oldLeague: userCurrentLeague,
+            newLeague: _getUserLeague(
                 IGameItems(gameItemsAddress).balanceOf(
-                    playerAddress,
+                    trophyAdjustmentInput.playerAddress,
                     seasonTrophyId
                 )
             ),
-            ratingDifference
-        );
+            trophyChange: trophyAmountToGrantOrBurn
+        });
     }
 
     /**
@@ -437,11 +507,11 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
         ).getValue(PVP_LEAGUE_TROPHY_THRESHOLDS);
         uint256 userLeague = 0;
-        if (trophyCount > leagueThresholds[leagueThresholds.length - 1]) {
+        if (trophyCount >= leagueThresholds[leagueThresholds.length - 1]) {
             userLeague = leagueThresholds.length - 1;
         } else {
             for (uint256 i = 0; i < leagueThresholds.length; i++) {
-                if (trophyCount < leagueThresholds[i]) {
+                if (trophyCount < leagueThresholds[i + 1]) {
                     userLeague = i;
                     break;
                 }
@@ -462,17 +532,21 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         MatchDataResult memory matchDataResult,
         uint256 pvpSeasonId,
         address playerAddress,
-        int256 trophyChange,
+        uint256 trophyChange,
         uint256[] memory lootGrantedToRecord
     ) internal {
         PvpSummaryComponent pvpSummaryComponent = PvpSummaryComponent(
             _gameRegistry.getComponent(PVP_SUMMARY_COMPONENT_ID)
         );
+        uint256 playeGameSessionEntity = EntityLibrary.accountSubEntity(
+            playerAddress,
+            matchDataResult.gameSessionId
+        );
+        if (pvpSummaryComponent.has(playeGameSessionEntity)) {
+            revert DoubleReport(playerAddress, matchDataResult.gameSessionId);
+        }
         pvpSummaryComponent.setLayoutValue(
-            EntityLibrary.accountSubEntity(
-                playerAddress,
-                matchDataResult.gameSessionId
-            ),
+            playeGameSessionEntity,
             PvpSummaryComponentLayout({
                 lootGrantedToRecord: lootGrantedToRecord,
                 trophyChange: int256(trophyChange),
@@ -491,10 +565,7 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         string[] memory tags = new string[](1);
         tags[0] = battleSummaryTag;
         TagsComponent(_gameRegistry.getComponent(TAGS_COMPONENT_ID)).setValue(
-            EntityLibrary.accountSubEntity(
-                playerAddress,
-                matchDataResult.gameSessionId
-            ),
+            playeGameSessionEntity,
             tags
         );
     }

@@ -17,7 +17,6 @@ import {GAME_LOGIC_CONTRACT_ROLE} from "../Constants.sol";
 import {IAccountXpSystem, BASE_ACCOUNT_SKILL_ID, ID} from "./IAccountXpSystem.sol";
 import {ITradeLicenseSystem, ID as TRADE_LICENSE_ID} from "./ITradeLicenseSystem.sol";
 
-
 // GameGlobals key for TradeLicense AccountXp threshold
 uint256 constant TRADE_LICENSE_THRESHOLD = uint256(
     keccak256("game.piratenation.global.trade_license_threshold")
@@ -77,23 +76,44 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
         uint256 entityGranting,
         uint256 numSuccesses,
         uint256 numFailures
-    ) public override nonReentrant whenNotPaused onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        AccountSkillsXpGrantedLayout memory accountSkillsXpGrantedLayout = AccountSkillsXpGrantedComponent(
-            _gameRegistry.getComponent(ACCOUNT_SKILLS_XP_GRANTED_COMPONENT_ID)
-        ).getLayoutValue(entityGranting);
+    )
+        public
+        override
+        nonReentrant
+        whenNotPaused
+        onlyRole(GAME_LOGIC_CONTRACT_ROLE)
+    {
+        AccountSkillsXpGrantedLayout
+            memory accountSkillsXpGrantedLayout = AccountSkillsXpGrantedComponent(
+                _gameRegistry.getComponent(
+                    ACCOUNT_SKILLS_XP_GRANTED_COMPONENT_ID
+                )
+            ).getLayoutValue(entityGranting);
         // loop through accountSkillsXpGrantedLayout.accountSkillEntities
-        for (uint256 i = 0; i < accountSkillsXpGrantedLayout.accountSkillEntities.length; i++) {
+        for (
+            uint256 i = 0;
+            i < accountSkillsXpGrantedLayout.accountSkillEntities.length;
+            i++
+        ) {
             uint256 amount = 0;
             if (numSuccesses > 0) {
-                amount += accountSkillsXpGrantedLayout.successAmount[i] * numSuccesses;
+                amount +=
+                    accountSkillsXpGrantedLayout.successAmount[i] *
+                    numSuccesses;
             }
             if (numFailures > 0) {
-                amount += accountSkillsXpGrantedLayout.failAmount[i] * numFailures;
+                amount +=
+                    accountSkillsXpGrantedLayout.failAmount[i] *
+                    numFailures;
             }
             if (amount > 0) {
-                _grantAccountSkillXp(accountEntity, amount, accountSkillsXpGrantedLayout.accountSkillEntities[i]);
+                _grantAccountSkillXp(
+                    accountEntity,
+                    amount,
+                    accountSkillsXpGrantedLayout.accountSkillEntities[i]
+                );
             }
-        }   
+        }
     }
 
     /**
@@ -110,7 +130,9 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
         );
         // Get current account xp and return
         uint256 currentXp = accountXpTracker
-            .getLayoutValue(_getAccountSkillProgressEntity(accountEntity, skillEntity))
+            .getLayoutValue(
+                _getAccountSkillProgressEntity(accountEntity, skillEntity)
+            )
             .currentAccountXp;
         return currentXp;
     }
@@ -123,7 +145,7 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
     function getAccountSkillLevel(
         uint256 accountEntity,
         uint256 skillEntity
-    ) public override view returns (uint256) {
+    ) public view override returns (uint256) {
         uint256 currentXp = getAccountSkillXp(accountEntity, skillEntity);
         return _convertAccountSkillXpToLevel(currentXp, skillEntity);
     }
@@ -136,7 +158,7 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
     function convertAccountSkillXpToLevel(
         uint256 accountXp,
         uint256 skillEntity
-    ) public override view returns (uint256) {
+    ) public view override returns (uint256) {
         return _convertAccountSkillXpToLevel(accountXp, skillEntity);
     }
 
@@ -148,15 +170,27 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
     function hasRequiredSkills(
         uint256 accountEntity,
         uint256 entityWithRequirements
-    ) external override view returns (bool) {
-        AccountSkillRequirementsLayout memory accountSkillRequirementsLayout = AccountSkillRequirementsComponent(
-            _gameRegistry.getComponent(ACCOUNT_SKILL_REQUIREMENTS_COMPONENT_ID)
-        ).getLayoutValue(entityWithRequirements);
+    ) external view override returns (bool) {
+        AccountSkillRequirementsLayout
+            memory accountSkillRequirementsLayout = AccountSkillRequirementsComponent(
+                _gameRegistry.getComponent(
+                    ACCOUNT_SKILL_REQUIREMENTS_COMPONENT_ID
+                )
+            ).getLayoutValue(entityWithRequirements);
 
-        for (uint256 i = 0; i < accountSkillRequirementsLayout.accountSkillEntities.length; i++) {
-            uint256 requiredSkillEntity = accountSkillRequirementsLayout.accountSkillEntities[i];
-            uint256 requiredSkillLevel = accountSkillRequirementsLayout.skillLevelRequirements[i];
-            uint256 accountSkillLevel = getAccountSkillLevel(accountEntity, requiredSkillEntity);
+        for (
+            uint256 i = 0;
+            i < accountSkillRequirementsLayout.accountSkillEntities.length;
+            i++
+        ) {
+            uint256 requiredSkillEntity = accountSkillRequirementsLayout
+                .accountSkillEntities[i];
+            uint256 requiredSkillLevel = accountSkillRequirementsLayout
+                .skillLevelRequirements[i];
+            uint256 accountSkillLevel = getAccountSkillLevel(
+                accountEntity,
+                requiredSkillEntity
+            );
             if (accountSkillLevel < requiredSkillLevel) {
                 return false;
             }
@@ -166,7 +200,7 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
 
     /** INTERNAL **/
 
-     /**
+    /**
      * @dev Convert account xp to level for a specific skill
      * @param accountXp Account xp to convert
      * @param skillEntity Entity of the account skill
@@ -179,7 +213,9 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
             _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
         );
 
-        uint256[] memory levelThresholds = uint256ArrayComponent.getValue(skillEntity);
+        uint256[] memory levelThresholds = uint256ArrayComponent.getValue(
+            skillEntity
+        );
         uint256 currentLevel = 0;
         for (uint256 i = 0; i < levelThresholds.length; i++) {
             if (accountXp >= levelThresholds[i]) {
@@ -198,15 +234,21 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
         uint256 accountEntity,
         uint256 newAccountXp
     ) internal {
-
         Uint256Component uint256Component = Uint256Component(
             _gameRegistry.getComponent(UINT256_COMPONENT_ID)
         );
 
         // Get account xp threshold to obtain TradeLicense
-        uint256 tradeLicenseThreshold = uint256Component.getValue(TRADE_LICENSE_THRESHOLD);
+        uint256 tradeLicenseThreshold = uint256Component.getValue(
+            TRADE_LICENSE_THRESHOLD
+        );
         // Check if new account xp level qualifies for TradeLicense and grant if needed
-        if (_convertAccountSkillXpToLevel(newAccountXp, BASE_ACCOUNT_SKILL_ID) >= tradeLicenseThreshold) {
+        if (
+            _convertAccountSkillXpToLevel(
+                newAccountXp,
+                BASE_ACCOUNT_SKILL_ID
+            ) >= tradeLicenseThreshold
+        ) {
             ITradeLicenseSystem tradeLicenseSystem = ITradeLicenseSystem(
                 _getSystem(TRADE_LICENSE_ID)
             );
@@ -232,9 +274,13 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
         uint256 newAccountXp
     ) internal {
         uint256 currentAccountLevel = _convertAccountSkillXpToLevel(
-            currentAccountXp, skillEntity
+            currentAccountXp,
+            skillEntity
         );
-        uint256 newAccountLevel = _convertAccountSkillXpToLevel(newAccountXp, skillEntity);
+        uint256 newAccountLevel = _convertAccountSkillXpToLevel(
+            newAccountXp,
+            skillEntity
+        );
         // Check if next level has been reached
         if (newAccountLevel > currentAccountLevel) {
             LootSetArrayComponent lootSetArrayComponent = LootSetArrayComponent(
@@ -244,30 +290,32 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
             uint256[] memory lootSetEntityIds = lootSetArrayComponent.getValue(
                 skillEntity
             );
-            // No reward loots have been set
-            if (lootSetEntityIds.length == 0) {
-                return;
-            }
-            address account = EntityLibrary.entityToAddress(accountEntity);
-            address lootEntityArrayComponentAddress = _gameRegistry.getComponent(
-                LOOT_ENTITY_ARRAY_COMPONENT_ID
-            );
-            ILootSystemV2.Loot[] memory lootArray;
-            ILootSystemV2 lootSystem = ILootSystemV2(
-                _getSystem(LOOT_SYSTEM_V2_ID)
-            );
-            // Grant loot for each new level after the current level
-            for (uint256 i = currentAccountLevel; i < newAccountLevel; i++) {
-                uint256 levelToGrantFor = i + 1;
-                uint256 lootSetEntity = lootSetEntityIds[levelToGrantFor];
-                if (lootSetEntity != 0) {
-                    lootArray = LootArrayComponentLibrary
-                        .convertLootEntityArrayToLoot(
-                            lootEntityArrayComponentAddress,
-                            lootSetEntity
-                        );
-                    if (lootArray.length > 0) {
-                        lootSystem.grantLoot(account, lootArray);
+            // Grant rewards if any
+            if (lootSetEntityIds.length > 0) {
+                address account = EntityLibrary.entityToAddress(accountEntity);
+                address lootEntityArrayComponentAddress = _gameRegistry
+                    .getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID);
+                ILootSystemV2.Loot[] memory lootArray;
+                ILootSystemV2 lootSystem = ILootSystemV2(
+                    _getSystem(LOOT_SYSTEM_V2_ID)
+                );
+                // Grant loot for each new level after the current level
+                for (
+                    uint256 i = currentAccountLevel;
+                    i < newAccountLevel;
+                    i++
+                ) {
+                    uint256 levelToGrantFor = i + 1;
+                    uint256 lootSetEntity = lootSetEntityIds[levelToGrantFor];
+                    if (lootSetEntity != 0) {
+                        lootArray = LootArrayComponentLibrary
+                            .convertLootEntityArrayToLoot(
+                                lootEntityArrayComponentAddress,
+                                lootSetEntity
+                            );
+                        if (lootArray.length > 0) {
+                            lootSystem.grantLoot(account, lootArray);
+                        }
                     }
                 }
             }
@@ -280,7 +328,7 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
      * @param amount Amount of xp to grant
      * @param skillEntity Entity of the account skill
      */
-    function _grantAccountSkillXp (
+    function _grantAccountSkillXp(
         uint256 entity,
         uint256 amount,
         uint256 skillEntity
@@ -300,14 +348,19 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
         );
 
         // Get entity that tracks account xp progress for this skill
-        uint256 accountSkillProgressEntity = _getAccountSkillProgressEntity(entity, skillEntity);
+        uint256 accountSkillProgressEntity = _getAccountSkillProgressEntity(
+            entity,
+            skillEntity
+        );
 
         // Get current account xp and return if already at max threshold
         uint256 currentXp = accountXpTracker
             .getLayoutValue(accountSkillProgressEntity)
             .currentAccountXp;
 
-        uint256[] memory levelThresholds = uint256ArrayComponent.getValue(skillEntity);
+        uint256[] memory levelThresholds = uint256ArrayComponent.getValue(
+            skillEntity
+        );
         uint256 maxXpAmount = levelThresholds[levelThresholds.length - 1];
         // Do not grant more xp if max already reached
         if (currentXp >= maxXpAmount) {
@@ -333,12 +386,16 @@ contract AccountXpSystem is IAccountXpSystem, GameRegistryConsumerUpgradeable {
      * @param entity EntityId of the account
      * @param skillEntity Entity of the account skill
      */
-    function _getAccountSkillProgressEntity (uint256 entity, uint256 skillEntity) internal pure returns (uint256) {
+    function _getAccountSkillProgressEntity(
+        uint256 entity,
+        uint256 skillEntity
+    ) internal pure returns (uint256) {
         if (skillEntity == BASE_ACCOUNT_SKILL_ID) {
             return entity;
         }
-        uint256 entityId = uint256(keccak256(abi.encodePacked(entity, skillEntity)));
+        uint256 entityId = uint256(
+            keccak256(abi.encodePacked(entity, skillEntity))
+        );
         return entityId;
     }
-
-} 
+}
