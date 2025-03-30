@@ -416,9 +416,11 @@ contract Glicko2System {
         // Ensure new rating stays within bounds : optional
         // if (newRating > MAX_GLICKO2_RATING) {
         //     newRating = MAX_GLICKO2_RATING;
-        // } else if (newRating < MIN_GLICKO2_RATING) {
-        //     newRating = MIN_GLICKO2_RATING;
         // }
+        // Enforce minimum rating, common practice (100-400 minimum)
+        if (newRating < MIN_GLICKO2_RATING) {
+            newRating = MIN_GLICKO2_RATING;
+        }
 
         int256 newRD = (calc.newPhi * RATING_SCALE_FACTOR) / 10_000_000;
         return (newRating, newRD);

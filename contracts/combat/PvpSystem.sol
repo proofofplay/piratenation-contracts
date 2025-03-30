@@ -82,6 +82,15 @@ error InvalidGameSessionId();
 /// @notice Error double report of a match
 error DoubleReport(address playerOneAddress, uint256 gameSessionId);
 
+/// @notice Error when the last played timestamp is invalid
+error InvalidLastPlayedTimestamp();
+
+/// @notice Error when invalid scaled inputs are used
+error InvalidScaledInputs();
+
+/// @notice Negative inputs are used
+error NegativeInputs();
+
 /** EVENTS **/
 
 /// @notice Event when a match ends - no need to index opponent address as they will get their own event when they end their match
@@ -212,6 +221,18 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
+     * Post the match results to the PvP system for Lobby matches. This does not grant any trophies or rating updates.
+     * @param playerOneAddress The address of the player
+     * @param matchDataResult The result of the match
+     */
+    function postLobbyMatchResult(address playerOneAddress, MatchDataResult memory matchDataResult) external onlyRole(PVP_VALIDATOR_ROLE) {
+        // Emit the end match event
+        _emitEndMatch(matchDataResult.gameSessionId, playerOneAddress, matchDataResult.outcome, matchDataResult.opponentAddress, matchDataResult.ipfsUrl);
+    }
+
+    /** VIEW FUNCTIONS **/
+
+    /**
      * Get the rating data for a player
      * @param playerAddress The address of the player
      * @return rating The rating of the player
@@ -231,7 +252,7 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         UserPvpDataComponentLayout memory playerPvpData = UserPvpDataComponent(
             _gameRegistry.getComponent(USER_PVP_DATA_COMPONENT_ID)
         ).getLayoutValue(playerSeasonAddressEntity);
-        if (playerPvpData.matchmakingRating == 0) {
+        if (playerPvpData.matchmakingRatingLastUpdate == 0) {
             return (
                 INITIAL_RATING,
                 INITIAL_DEVIATION,
@@ -279,13 +300,48 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
-     * Post the match results to the PvP system for Lobby matches. This does not grant any trophies or rating updates.
-     * @param playerOneAddress The address of the player
-     * @param matchDataResult The result of the match
+     * @dev View function to get the match results for a player match against an opponent
+     * Helper function to simulate the match results before they are posted
      */
-    function postLobbyMatchResult(address playerOneAddress, MatchDataResult memory matchDataResult) external onlyRole(PVP_VALIDATOR_ROLE) {
-        // Emit the end match event
-        _emitEndMatch(matchDataResult.gameSessionId, playerOneAddress, matchDataResult.outcome, matchDataResult.opponentAddress, matchDataResult.ipfsUrl);
+    function getMatchResults(address playerOneAddress,
+        MatchDataResult memory matchDataResult) external view returns (RatingUpdateResult memory playerOneResult, UserPvpDataComponentLayout memory oldData) {
+        // Validate inputs
+        _validateInputs(playerOneAddress, matchDataResult);
+        UserPvpDataComponent userPvpDataComponent = UserPvpDataComponent(
+            _gameRegistry.getComponent(USER_PVP_DATA_COMPONENT_ID)
+        );
+        // Current PvP season running
+        uint256 pvpSeasonId = EntityBaseComponent(
+            _gameRegistry.getComponent(ENTITY_BASE_COMPONENT_ID)
+        ).getValue(ID);
+        
+        uint256 playerSeasonAddressEntity = EntityLibrary.accountSubEntity(
+            playerOneAddress,
+            pvpSeasonId
+        );
+        oldData = _initializePlayer(
+            userPvpDataComponent,
+            playerSeasonAddressEntity
+        );
+
+        // Send to Glicko2Library to calculate new ratings
+        playerOneResult = Glicko2Library
+            .calculateResultsUsingStats(
+                PlayerRatingData({
+                    ratingScore: oldData.matchmakingRating,
+                    ratingDeviation: oldData.matchmakingRatingDeviation,
+                    ratingVolatility: oldData.matchmakingRatingVolatility,
+                    lastUpdateTimestamp: oldData
+                        .matchmakingRatingLastUpdate
+                }),
+                PlayerRatingData({
+                    ratingScore: matchDataResult.ratingScore,
+                    ratingDeviation: matchDataResult.ratingDeviation,
+                    ratingVolatility: matchDataResult.ratingVolatility,
+                    lastUpdateTimestamp: matchDataResult.lastUpdateTimestamp
+                }),
+                matchDataResult.outcome
+            );
     }
 
     /** INTERNAL **/
@@ -332,6 +388,10 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     function _handleTrophyAdjustment(
         TrophyAdjustmentInput memory trophyAdjustmentInput
     ) internal returns (TrophyAdjustmentResult memory) {
+        // If rating difference is so miniscule that it's 0, set to 1 for trophy adjustment
+        if(trophyAdjustmentInput.ratingDifference == 0) {
+            trophyAdjustmentInput.ratingDifference = 1;
+        }
         (address gameItemsAddress, uint256 seasonTrophyId) = EntityLibrary
             .entityToToken(
                 EntityBaseComponent(
@@ -578,7 +638,7 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     function _validateInputs(
         address playerOneAddress,
         MatchDataResult memory matchDataResult
-    ) internal pure {
+    ) internal view {
         // Check wallet addresses
         if (
             playerOneAddress == matchDataResult.opponentAddress ||
@@ -598,6 +658,18 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             matchDataResult.ratingVolatility == 0
         ) {
             revert InvalidRatingInputs();
+        }
+        // Check valid last played timestamp posted
+        if(matchDataResult.lastUpdateTimestamp == 0 || matchDataResult.lastUpdateTimestamp > block.timestamp) {
+            revert InvalidLastPlayedTimestamp();
+        }
+        // Check valid scaled inputs
+        if(matchDataResult.ratingScore / 1000 == 0 || matchDataResult.ratingDeviation / 1000 == 0 || matchDataResult.ratingVolatility / 1000 == 0) {
+            revert InvalidScaledInputs();
+        }
+        // Check negative inputs
+        if(matchDataResult.ratingScore < 0 || matchDataResult.ratingDeviation < 0 || matchDataResult.ratingVolatility < 0) {
+            revert NegativeInputs();
         }
     }
 }

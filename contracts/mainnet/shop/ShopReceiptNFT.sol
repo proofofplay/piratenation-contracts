@@ -55,6 +55,22 @@ contract ShopReceiptNFT is
     }
 
     /**
+     * @dev Override _transfer to prevent transfers except by authorized operations
+     */
+    function _transfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal override {
+        require(
+            from == address(0) || // Minting
+            to == address(0),     // Burning
+            "ShopReceiptNFT: token transfer is disabled"
+        );
+        super._transfer(from, to, tokenId);
+    }
+
+    /**
      * @dev Mint a new token
      * @param to The address to mint the token to
      * @param purchaseId The purchase ID to mint a receipt for.
