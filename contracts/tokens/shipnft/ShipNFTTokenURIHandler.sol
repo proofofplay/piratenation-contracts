@@ -78,13 +78,7 @@ contract ShipNFTTokenURIHandler is
         }
         uint256 mixinEntity = mixins[0];
 
-        // Get equipment traits
-        TokenURITrait[] memory equipmentTraits = _getEquipmentTraits(
-            tokenContract,
-            tokenId
-        );
-
-        uint256 numStaticTraits = 11 + equipmentTraits.length;
+        uint256 numStaticTraits = 10;
 
         TokenURITrait[] memory baseTraits = new TokenURITrait[](
             numStaticTraits
@@ -195,14 +189,6 @@ contract ShipNFTTokenURIHandler is
         });
 
         baseTraits[8] = TokenURITrait({
-            name: "Skin Equipped",
-            value: _handleSkinEquippedTrait(entity),
-            dataType: TraitDataType.STRING,
-            isTopLevelProperty: false,
-            hidden: false
-        });
-
-        baseTraits[9] = TokenURITrait({
             name: "Level",
             value: abi.encode(_handleLevelTrait(entity)),
             dataType: TraitDataType.UINT,
@@ -210,7 +196,7 @@ contract ShipNFTTokenURIHandler is
             hidden: false
         });
 
-        baseTraits[10] = TokenURITrait({
+        baseTraits[9] = TokenURITrait({
             name: "Soulbound",
             value: MixinLibrary.getBytesValue(
                 entity,
@@ -221,13 +207,6 @@ contract ShipNFTTokenURIHandler is
             isTopLevelProperty: false,
             hidden: false
         });
-
-        // Loop through equipment traits and add them to the extra traits array
-        for (uint256 i = 0; i < equipmentTraits.length; i++) {
-            baseTraits[
-                i + numStaticTraits - equipmentTraits.length
-            ] = equipmentTraits[i];
-        }
 
         return JSONRenderer.generateTokenURI(baseTraits);
     }
@@ -354,27 +333,6 @@ contract ShipNFTTokenURIHandler is
             _gameRegistry.getComponent(ANIMATION_URL_COMPONENT_ID)
         ).getValue(skinContainer.skinEntities[0]);
         return abi.encode(animationUrl);
-    }
-
-    /**
-     * @dev Handle skin equipped trait
-     */
-    function _handleSkinEquippedTrait(
-        uint256 entity
-    ) internal view returns (bytes memory) {
-        // Check if skin is equipped
-        string memory equipped = "None";
-        SkinContainerComponentLayout
-            memory skinContainer = SkinContainerComponent(
-                _gameRegistry.getComponent(SKIN_CONTAINER_ID)
-            ).getLayoutValue(entity);
-        // If skin is equipped then return entity name from NameComponent
-        if (skinContainer.slotEntities.length > 0) {
-            equipped = NameComponent(
-                _gameRegistry.getComponent(NAME_COMPONENT_ID)
-            ).getValue(skinContainer.skinEntities[0]);
-        }
-        return abi.encode(equipped);
     }
 
     /**

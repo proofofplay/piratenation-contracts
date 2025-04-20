@@ -21,12 +21,20 @@ import {GameItems, ID as GAME_ITEMS_ID} from "../tokens/gameitems/GameItems.sol"
 // ID of this contract
 uint256 constant ID = uint256(keccak256("game.piratenation.rerollsystem"));
 
-uint256 constant EXPERTISE_ROLL_CONFIG = uint256(
-    keccak256("game.piratenation.rerollsystem.expertiseroll")
+uint256 constant GEN_0_EXPERTISE_ROLL_CONFIG = uint256(
+    keccak256("game.piratenation.rerollsystem.gen0.expertiseroll")
 );
 
-uint256 constant ELEMENTAL_AFFINITY_ROLL_CONFIG = uint256(
-    keccak256("game.piratenation.rerollsystem.elementalaffinityroll")
+uint256 constant GEN_0_ELEMENTAL_AFFINITY_ROLL_CONFIG = uint256(
+    keccak256("game.piratenation.rerollsystem.gen0.elementalaffinityroll")
+);
+
+uint256 constant GEN_1_EXPERTISE_ROLL_CONFIG = uint256(
+    keccak256("game.piratenation.rerollsystem.gen1.expertiseroll")
+);
+
+uint256 constant GEN_1_ELEMENTAL_AFFINITY_ROLL_CONFIG = uint256(
+    keccak256("game.piratenation.rerollsystem.gen1.elementalaffinityroll")
 );
 
 /**
@@ -45,6 +53,8 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
     error RerollPending();
 
     error NotOwner();
+
+    error InvalidCost();
 
     struct VRFRequest {
         uint256 pirateEntity;
@@ -75,11 +85,26 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
         if (isExpertise == isAffinity) {
             revert InvalidRoll();
         }
+        uint256 pirateGeneration = GenerationComponent(
+            _gameRegistry.getComponent(GENERATION_COMPONENT_ID)
+        ).getValue(pirateEntity);
+        if (pirateGeneration > 1) {
+            revert InvalidPirateGeneration();
+        }
         address caller = _getPlayerAccount(_msgSender());
         _checkValid(pirateEntity, caller);
+
         uint256 configEntityId = isExpertise
-            ? EXPERTISE_ROLL_CONFIG
-            : ELEMENTAL_AFFINITY_ROLL_CONFIG;
+            ? (
+                pirateGeneration == 0
+                    ? GEN_0_EXPERTISE_ROLL_CONFIG
+                    : GEN_1_EXPERTISE_ROLL_CONFIG
+            )
+            : (
+                pirateGeneration == 0
+                    ? GEN_0_ELEMENTAL_AFFINITY_ROLL_CONFIG
+                    : GEN_1_ELEMENTAL_AFFINITY_ROLL_CONFIG
+            );
         _burnInputForPirate(caller, pirateEntity, configEntityId);
         // Kick off VRF
         uint256 requestId = _requestRandomNumber(0);
@@ -191,14 +216,6 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
             revert InvalidPirate();
         }
 
-        if (
-            GenerationComponent(
-                _gameRegistry.getComponent(GENERATION_COMPONENT_ID)
-            ).getValue(pirateEntity) == 0
-        ) {
-            revert InvalidPirateGeneration();
-        }
-
         // Check ownership
         if (IERC721(tokenContract).ownerOf(tokenId) != caller) {
             revert NotOwner();
@@ -229,7 +246,9 @@ contract RerollSystem is GameRegistryConsumerUpgradeable {
                 (pirateLevel - config.levelToScale) *
                 config.addedGemCostPerLevel;
         }
-
+        if (totalGemCost == 0) {
+            revert InvalidCost();
+        }
         GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID)).burn(
             account,
             GEM_TOKEN_ID,

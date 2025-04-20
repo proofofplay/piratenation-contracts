@@ -11,6 +11,10 @@ import {BanComponent, ID as BAN_COMPONENT_ID} from "../../generated/components/B
 import {SoulboundComponent, ID as SOULBOUND_COMPONENT_ID} from "../../generated/components/SoulboundComponent.sol";
 import {MixinComponent, ID as MIXIN_COMPONENT_ID} from "../../generated/components/MixinComponent.sol";
 import {Banned} from "../../ban/BanSystem.sol";
+import {SkinContainerComponent, Layout as SkinContainerComponentLayout, ID as SKIN_CONTAINER_COMPONENT_ID} from "../../generated/components/SkinContainerComponent.sol";
+import {SHIP_SKIN_GUID} from "../../skin/ShipSkinSystem.sol";
+import {IGameItems, ID as GAME_ITEMS_CONTRACT_ID} from "../gameitems/IGameItems.sol";
+import {ItemsEquippedComponent, ID as ITEMS_EQUIPPED_COMPONENT_ID} from "../../generated/components/ItemsEquippedComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.shipnftbeforetokentransferhandler")
@@ -69,6 +73,51 @@ contract ShipNFTBeforeTokenTransferHandler is
             ) {
                 revert Banned();
             }
+            SkinContainerComponentLayout memory skinContainerLayout;
+            uint256[] memory mixins;
+            SoulboundComponent soulboundComponent = SoulboundComponent(
+                _gameRegistry.getComponent(SOULBOUND_COMPONENT_ID)
+            );
+            for (uint256 idx = 0; idx < batchSize; idx++) {
+                uint256 tokenId = firstTokenId + idx;
+                uint256 entity = EntityLibrary.tokenToEntity(
+                    tokenContract,
+                    tokenId
+                );
+                skinContainerLayout = SkinContainerComponent(
+                    _gameRegistry.getComponent(SKIN_CONTAINER_COMPONENT_ID)
+                ).getLayoutValue(entity);
+
+                // Remove all equipped items from the ship
+                ItemsEquippedComponent(
+                    _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
+                ).remove(entity);
+                // Mint equipped skin back to user
+                for (
+                    uint256 i = 0;
+                    i < skinContainerLayout.slotEntities.length;
+                    i++
+                ) {
+                    if (skinContainerLayout.slotEntities[i] == SHIP_SKIN_GUID) {
+                        (
+                            address itemTokenContract,
+                            uint256 itemTokenId
+                        ) = EntityLibrary.entityToToken(
+                                skinContainerLayout.skinEntities[i]
+                            );
+                        IGameItems(itemTokenContract).mint(
+                            from,
+                            itemTokenId,
+                            1
+                        );
+                        SkinContainerComponent(
+                            _gameRegistry.getComponent(
+                                SKIN_CONTAINER_COMPONENT_ID
+                            )
+                        ).removeValueAtIndex(entity, i);
+                    }
+                }
+            }
 
             // Can burn soulbound items
             if (to != address(0)) {
@@ -79,12 +128,6 @@ contract ShipNFTBeforeTokenTransferHandler is
                     ),
                     EntityLibrary.addressToEntity(from)
                 );
-                SoulboundComponent soulboundComponent = SoulboundComponent(
-                    _gameRegistry.getComponent(SOULBOUND_COMPONENT_ID)
-                );
-                MixinComponent mixinComponent = MixinComponent(
-                    _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
-                );
 
                 for (uint256 idx = 0; idx < batchSize; idx++) {
                     uint256 tokenId = firstTokenId + idx;
@@ -93,13 +136,14 @@ contract ShipNFTBeforeTokenTransferHandler is
                         tokenId
                     );
                     // Get the mixin id for the ship
-                    uint256[] memory mixins = mixinComponent.getValue(entity);
+                    mixins = MixinComponent(
+                        _gameRegistry.getComponent(MIXIN_COMPONENT_ID)
+                    ).getValue(entity);
                     if (mixins.length == 0) {
                         revert NoMixinFound(entity);
                     }
-                    uint256 mixinEntity = mixins[0];
                     // Check if mixin id has soulbound component
-                    bool isSoulBound = soulboundComponent.getValue(mixinEntity);
+                    bool isSoulBound = soulboundComponent.getValue(mixins[0]);
                     if (isSoulBound) {
                         revert TokenIsSoulbound();
                     }

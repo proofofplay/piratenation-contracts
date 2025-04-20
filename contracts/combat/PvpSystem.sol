@@ -6,14 +6,14 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 import {EntityLibrary} from "../core/EntityLibrary.sol";
 import {LootArrayComponentLibrary} from "../loot/LootArrayComponentLibrary.sol";
 import {TimeRangeLibrary} from "../core/TimeRangeLibrary.sol";
-import {Glicko2Library, PlayerRatingData, INITIAL_RATING, INITIAL_DEVIATION, INITIAL_VOLATILITY, VICTORY, DEFEAT, RatingUpdateResult, PlayerRatingData} from "../core/Glicko2Library.sol";
+import {Glicko2Library, PlayerRatingData, INITIAL_RATING, INITIAL_DEVIATION, INITIAL_VOLATILITY, VICTORY, DEFEAT, RatingUpdateResult} from "../core/Glicko2Library.sol";
 
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
 import {IGameItems} from "../tokens/gameitems/IGameItems.sol";
 import {ILootSystemV2, ID as LOOT_SYSTEM_V2_ID} from "../loot/ILootSystemV2.sol";
 
 import {UserPvpDataComponent, Layout as UserPvpDataComponentLayout, ID as USER_PVP_DATA_COMPONENT_ID} from "../generated/components/UserPvpDataComponent.sol";
-import {LootEntityArrayComponent, Layout as LootEntityArrayLayout, ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
+import {ID as LOOT_ENTITY_ARRAY_COMPONENT_ID} from "../generated/components/LootEntityArrayComponent.sol";
 import {EntityBaseComponent, ID as ENTITY_BASE_COMPONENT_ID} from "../generated/components/EntityBaseComponent.sol";
 import {StaticEntityListComponent, ID as STATIC_ENTITY_LIST_COMPONENT_ID} from "../generated/components/StaticEntityListComponent.sol";
 import {LootClaimedComponent, Layout as LootClaimedComponentLayout, ID as LOOT_CLAIMED_COMPONENT_ID} from "../generated/components/LootClaimedComponent.sol";
@@ -22,6 +22,7 @@ import {Uint256ArrayComponent, Layout as Uint256ArrayComponentLayout, ID as UINT
 import {TimeRangeComponent, ID as TIME_RANGE_COMPONENT_ID} from "../generated/components/TimeRangeComponent.sol";
 import {PvpSummaryComponent, Layout as PvpSummaryComponentLayout, ID as PVP_SUMMARY_COMPONENT_ID} from "../generated/components/PvpSummaryComponent.sol";
 import {TagsComponent, ID as TAGS_COMPONENT_ID} from "../generated/components/TagsComponent.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 
 // System ID for the PvP system
 uint256 constant ID = uint256(keccak256("game.piratenation.pvpsystem"));
@@ -31,6 +32,16 @@ bytes32 constant PVP_VALIDATOR_ROLE = keccak256("PVP_VALIDATOR_ROLE");
 // Global : League Trophy Thresholds
 uint256 constant PVP_LEAGUE_TROPHY_THRESHOLDS = uint256(
     keccak256("game.piratenation.global.pvp_league_trophy_thresholds")
+);
+
+// Global : PVP_TROPHY_CAP_CHECK_ARRAY
+uint256 constant PVP_TROPHY_CAP_CHECK_ARRAY = uint256(
+    keccak256("game.piratenation.global.pvp_trophy_cap_check_array")
+);
+
+// Global : PVP_TROPHY_CAP_BUMP_ARRAY
+uint256 constant PVP_TROPHY_CAP_BUMP_ARRAY = uint256(
+    keccak256("game.piratenation.global.pvp_trophy_cap_bump_array")
 );
 
 /** STRUCTS **/
@@ -50,6 +61,8 @@ struct MatchDataResult {
 /// @notice Input for trophy adjustment
 struct TrophyAdjustmentInput {
     address playerAddress;
+    int256 oldRatingValue;
+    int256 newRatingValue;
     int256 ratingDifference;
     uint256 seasonId;
     uint8 outcome;
@@ -91,16 +104,22 @@ error InvalidScaledInputs();
 /// @notice Negative inputs are used
 error NegativeInputs();
 
-/** EVENTS **/
-
-/// @notice Event when a match ends - no need to index opponent address as they will get their own event when they end their match
-event EndMatch(uint256 indexed gameSessionId, address indexed playerAddress, uint8 indexed outcome, address opponentAddress, string ipfsUrl);
-
 /**
  * @title PvP System
  * @notice Implements the PvP system
  */
 contract PvpSystem is GameRegistryConsumerUpgradeable {
+    /** EVENTS **/
+
+    /// @notice Event when a match ends - no need to index opponent address as they will get their own event when they end their match
+    event EndMatch(
+        uint256 indexed gameSessionId,
+        address indexed playerAddress,
+        uint8 indexed outcome,
+        address opponentAddress,
+        string ipfsUrl
+    );
+
     /** SETUP **/
 
     /**
@@ -189,9 +208,12 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             _gameRegistry.getComponent(USER_PVP_DATA_COMPONENT_ID)
         ).setLayoutValue(playerSeasonAddressEntity, playerPvpData);
         // Now handle the trophy adjustment
-        TrophyAdjustmentResult memory trophyAdjustmentResult = _handleTrophyAdjustment(
+        TrophyAdjustmentResult
+            memory trophyAdjustmentResult = _handleTrophyAdjustment(
                 TrophyAdjustmentInput({
                     playerAddress: playerOneAddress,
+                    oldRatingValue: oldRating,
+                    newRatingValue: playerPvpData.matchmakingRating,
                     ratingDifference: (playerPvpData.matchmakingRating -
                         oldRating) / 1000,
                     seasonId: pvpSeasonId,
@@ -200,7 +222,10 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             );
         uint256[] memory lootGrantedToRecord;
         // Handle winner ranking up if they won and moved up a league
-        if (matchDataResult.outcome == VICTORY && trophyAdjustmentResult.newLeague > trophyAdjustmentResult.oldLeague) {
+        if (
+            matchDataResult.outcome == VICTORY &&
+            trophyAdjustmentResult.newLeague > trophyAdjustmentResult.oldLeague
+        ) {
             lootGrantedToRecord = _handleRankedClaim(
                 playerOneAddress,
                 playerSeasonAddressEntity,
@@ -217,7 +242,13 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             lootGrantedToRecord
         );
         // Emit the end match event
-        _emitEndMatch(matchDataResult.gameSessionId, playerOneAddress, matchDataResult.outcome, matchDataResult.opponentAddress, matchDataResult.ipfsUrl);
+        _emitEndMatch(
+            matchDataResult.gameSessionId,
+            playerOneAddress,
+            matchDataResult.outcome,
+            matchDataResult.opponentAddress,
+            matchDataResult.ipfsUrl
+        );
     }
 
     /**
@@ -225,9 +256,18 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
      * @param playerOneAddress The address of the player
      * @param matchDataResult The result of the match
      */
-    function postLobbyMatchResult(address playerOneAddress, MatchDataResult memory matchDataResult) external onlyRole(PVP_VALIDATOR_ROLE) {
+    function postLobbyMatchResult(
+        address playerOneAddress,
+        MatchDataResult memory matchDataResult
+    ) external onlyRole(PVP_VALIDATOR_ROLE) {
         // Emit the end match event
-        _emitEndMatch(matchDataResult.gameSessionId, playerOneAddress, matchDataResult.outcome, matchDataResult.opponentAddress, matchDataResult.ipfsUrl);
+        _emitEndMatch(
+            matchDataResult.gameSessionId,
+            playerOneAddress,
+            matchDataResult.outcome,
+            matchDataResult.opponentAddress,
+            matchDataResult.ipfsUrl
+        );
     }
 
     /** VIEW FUNCTIONS **/
@@ -303,8 +343,17 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
      * @dev View function to get the match results for a player match against an opponent
      * Helper function to simulate the match results before they are posted
      */
-    function getMatchResults(address playerOneAddress,
-        MatchDataResult memory matchDataResult) external view returns (RatingUpdateResult memory playerOneResult, UserPvpDataComponentLayout memory oldData) {
+    function getMatchResults(
+        address playerOneAddress,
+        MatchDataResult memory matchDataResult
+    )
+        external
+        view
+        returns (
+            RatingUpdateResult memory playerOneResult,
+            UserPvpDataComponentLayout memory oldData
+        )
+    {
         // Validate inputs
         _validateInputs(playerOneAddress, matchDataResult);
         UserPvpDataComponent userPvpDataComponent = UserPvpDataComponent(
@@ -314,7 +363,7 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         uint256 pvpSeasonId = EntityBaseComponent(
             _gameRegistry.getComponent(ENTITY_BASE_COMPONENT_ID)
         ).getValue(ID);
-        
+
         uint256 playerSeasonAddressEntity = EntityLibrary.accountSubEntity(
             playerOneAddress,
             pvpSeasonId
@@ -325,23 +374,21 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         );
 
         // Send to Glicko2Library to calculate new ratings
-        playerOneResult = Glicko2Library
-            .calculateResultsUsingStats(
-                PlayerRatingData({
-                    ratingScore: oldData.matchmakingRating,
-                    ratingDeviation: oldData.matchmakingRatingDeviation,
-                    ratingVolatility: oldData.matchmakingRatingVolatility,
-                    lastUpdateTimestamp: oldData
-                        .matchmakingRatingLastUpdate
-                }),
-                PlayerRatingData({
-                    ratingScore: matchDataResult.ratingScore,
-                    ratingDeviation: matchDataResult.ratingDeviation,
-                    ratingVolatility: matchDataResult.ratingVolatility,
-                    lastUpdateTimestamp: matchDataResult.lastUpdateTimestamp
-                }),
-                matchDataResult.outcome
-            );
+        playerOneResult = Glicko2Library.calculateResultsUsingStats(
+            PlayerRatingData({
+                ratingScore: oldData.matchmakingRating,
+                ratingDeviation: oldData.matchmakingRatingDeviation,
+                ratingVolatility: oldData.matchmakingRatingVolatility,
+                lastUpdateTimestamp: oldData.matchmakingRatingLastUpdate
+            }),
+            PlayerRatingData({
+                ratingScore: matchDataResult.ratingScore,
+                ratingDeviation: matchDataResult.ratingDeviation,
+                ratingVolatility: matchDataResult.ratingVolatility,
+                lastUpdateTimestamp: matchDataResult.lastUpdateTimestamp
+            }),
+            matchDataResult.outcome
+        );
     }
 
     /** INTERNAL **/
@@ -354,8 +401,20 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
      * @param opponentAddress The address of the opponent
      * @param ipfsUrl The IPFS URL of the match
      */
-    function _emitEndMatch(uint256 gameSessionId, address playerAddress, uint8 outcome, address opponentAddress, string memory ipfsUrl) internal {
-        emit EndMatch(gameSessionId, playerAddress, outcome, opponentAddress, ipfsUrl);
+    function _emitEndMatch(
+        uint256 gameSessionId,
+        address playerAddress,
+        uint8 outcome,
+        address opponentAddress,
+        string memory ipfsUrl
+    ) internal {
+        emit EndMatch(
+            gameSessionId,
+            playerAddress,
+            outcome,
+            opponentAddress,
+            ipfsUrl
+        );
     }
 
     /**
@@ -389,7 +448,7 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         TrophyAdjustmentInput memory trophyAdjustmentInput
     ) internal returns (TrophyAdjustmentResult memory) {
         // If rating difference is so miniscule that it's 0, set to 1 for trophy adjustment
-        if(trophyAdjustmentInput.ratingDifference == 0) {
+        if (trophyAdjustmentInput.ratingDifference == 0) {
             trophyAdjustmentInput.ratingDifference = 1;
         }
         (address gameItemsAddress, uint256 seasonTrophyId) = EntityLibrary
@@ -420,6 +479,10 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             Glicko2Library.abs(trophyAdjustmentInput.ratingDifference)
         );
         if (trophyAdjustmentInput.outcome == VICTORY) {
+            trophyAmountToGrantOrBurn += _handleTrophyCapAndBump(
+                currentTrophyCount,
+                trophyAdjustmentInput.oldRatingValue
+            );
             // Enforce ceiling for win
             if (
                 leagueData.winConstant != 0 &&
@@ -431,7 +494,7 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
                 );
             }
             // Use rating difference to determine how many trophies to award
-            if(trophyAmountToGrantOrBurn > 0) {
+            if (trophyAmountToGrantOrBurn > 0) {
                 IGameItems(gameItemsAddress).mint(
                     trophyAdjustmentInput.playerAddress,
                     seasonTrophyId,
@@ -470,16 +533,17 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             );
         }
         // Return the old league and new league and trophy change
-        return TrophyAdjustmentResult({
-            oldLeague: userCurrentLeague,
-            newLeague: _getUserLeague(
-                IGameItems(gameItemsAddress).balanceOf(
-                    trophyAdjustmentInput.playerAddress,
-                    seasonTrophyId
-                )
-            ),
-            trophyChange: trophyAmountToGrantOrBurn
-        });
+        return
+            TrophyAdjustmentResult({
+                oldLeague: userCurrentLeague,
+                newLeague: _getUserLeague(
+                    IGameItems(gameItemsAddress).balanceOf(
+                        trophyAdjustmentInput.playerAddress,
+                        seasonTrophyId
+                    )
+                ),
+                trophyChange: trophyAmountToGrantOrBurn
+            });
     }
 
     /**
@@ -660,16 +724,59 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             revert InvalidRatingInputs();
         }
         // Check valid last played timestamp posted
-        if(matchDataResult.lastUpdateTimestamp == 0 || matchDataResult.lastUpdateTimestamp > block.timestamp) {
+        if (
+            matchDataResult.lastUpdateTimestamp == 0 ||
+            matchDataResult.lastUpdateTimestamp > block.timestamp
+        ) {
             revert InvalidLastPlayedTimestamp();
         }
         // Check valid scaled inputs
-        if(matchDataResult.ratingScore / 1000 == 0 || matchDataResult.ratingDeviation / 1000 == 0 || matchDataResult.ratingVolatility / 1000 == 0) {
+        if (
+            matchDataResult.ratingScore / 1000 == 0 ||
+            matchDataResult.ratingDeviation / 1000 == 0 ||
+            matchDataResult.ratingVolatility / 1000 == 0
+        ) {
             revert InvalidScaledInputs();
         }
         // Check negative inputs
-        if(matchDataResult.ratingScore < 0 || matchDataResult.ratingDeviation < 0 || matchDataResult.ratingVolatility < 0) {
+        if (
+            matchDataResult.ratingScore < 0 ||
+            matchDataResult.ratingDeviation < 0 ||
+            matchDataResult.ratingVolatility < 0
+        ) {
             revert NegativeInputs();
         }
+    }
+
+    /**
+     * Handle the trophy cap and bump, used to relieve small amounts of trophies granted to users from glicko changes
+     */
+    function _handleTrophyCapAndBump(
+        uint256 currentTrophyCount,
+        int256 oldRatingValue
+    ) internal view returns (uint256) {
+        if (
+            currentTrophyCount >=
+            uint256(Glicko2Library.abs(oldRatingValue)) / 1000
+        ) {
+            return 0;
+        } else {
+            uint256[] memory trophyCapCheckArray = Uint256ArrayComponent(
+                _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
+            ).getValue(PVP_TROPHY_CAP_CHECK_ARRAY);
+            uint256[] memory trophyCapBumpArray = Uint256ArrayComponent(
+                _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
+            ).getValue(PVP_TROPHY_CAP_BUMP_ARRAY);
+
+            for (uint256 i = 0; i < trophyCapCheckArray.length; i++) {
+                if (
+                    currentTrophyCount + trophyCapCheckArray[i] <=
+                    uint256(Glicko2Library.abs(oldRatingValue)) / 1000
+                ) {
+                    return trophyCapBumpArray[i];
+                }
+            }
+        }
+        return 0;
     }
 }
