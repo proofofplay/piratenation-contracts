@@ -12,7 +12,7 @@ import {IERC1155BeforeTokenTransferHandler} from "../IERC1155BeforeTokenTransfer
 import {ChainIdComponent, ID as CHAIN_ID_COMPONENT_ID} from "../../generated/components/ChainIdComponent.sol";
 import {EntityLibrary} from "../../core/EntityLibrary.sol";
 
-uint256 constant MAX_TOKEN_ID = 620;
+uint256 constant MAX_TOKEN_ID = 650;
 
 /** @title ERC1155 contract for Game Items */
 contract GameItems is
