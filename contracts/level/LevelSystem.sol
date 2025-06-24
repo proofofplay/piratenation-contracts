@@ -211,6 +211,72 @@ contract LevelSystem is ILevelSystem, GameRegistryConsumerUpgradeable {
 
         // Set XP component
         uint256 entityId = EntityLibrary.tokenToEntity(tokenContract, tokenId);
+        if (
+            IsPirateComponent(
+                _gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID)
+            ).getValue(entityId) == false
+        ) {
+            revert IsNotPirate();
+        }
+
+        // Cap XP
+        uint256 maxXp = uint256Component.getValue(MAX_XP_ID);
+        uint256 currentXp = XpComponent(
+            _gameRegistry.getComponent(XP_COMPONENT_ID)
+        ).getValue(entityId);
+
+        amount = Math.min(maxXp - currentXp, amount);
+        if (amount > 0) {
+            XpComponent(_gameRegistry.getComponent(XP_COMPONENT_ID)).setValue(
+                entityId,
+                currentXp + amount
+            );
+        }
+    }
+
+    /**
+     * Grants XP to the given entity
+     *
+     * @param entityId        Id of the entity
+     * @param amount        Amount of XP to grant
+     */
+    function grantXPToEntity(
+        uint256 entityId,
+        uint256 amount
+    ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
+        IsPirateComponent isPirateComponent = IsPirateComponent(
+            _gameRegistry.getComponent(IS_PIRATE_COMPONENT_ID)
+        );
+        if (isPirateComponent.getValue(entityId) == false) {
+            revert IsNotPirate();
+        }
+        (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
+            entityId
+        );
+        address owner = IERC721(tokenContract).ownerOf(tokenId);
+
+        ICaptainSystem captainSystem = ICaptainSystem(
+            _getSystem(CAPTAIN_SYSTEM_ID)
+        );
+
+        Uint256Component uint256Component = Uint256Component(
+            _gameRegistry.getComponent(UINT256_COMPONENT_ID)
+        );
+
+        // Apply XP modifier for captain
+        (address captainTokenContract, uint256 captainTokenId) = captainSystem
+            .getCaptainNFT(owner);
+
+        // If NFT is the captain, grant bonus XP
+        if (
+            captainTokenContract == tokenContract && captainTokenId == tokenId
+        ) {
+            amount =
+                amount +
+                (amount *
+                    uint256Component.getValue(CAPTAIN_XP_BONUS_PERCENT_ID)) /
+                PERCENTAGE_RANGE;
+        }
 
         // Cap XP
         uint256 maxXp = uint256Component.getValue(MAX_XP_ID);

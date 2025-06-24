@@ -64,6 +64,22 @@ contract ShipNFTBeforeTokenTransferHandler is
         uint256 firstTokenId,
         uint256 batchSize
     ) external {
+        SkinContainerComponentLayout memory skinContainerLayout;
+        ItemsEquippedComponent itemsEquippedComponent = ItemsEquippedComponent(
+            _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
+        );
+        for (uint256 idx = 0; idx < batchSize; idx++) {
+            uint256 tokenId = firstTokenId + idx;
+            uint256 entity = EntityLibrary.tokenToEntity(
+                tokenContract,
+                tokenId
+            );
+
+            // Remove all equipped items from the ship
+            if (itemsEquippedComponent.has(entity)) {
+                itemsEquippedComponent.remove(entity);
+            }
+        }
         // Locked check if not minting
         if (from != address(0)) {
             // Is not banned
@@ -73,11 +89,11 @@ contract ShipNFTBeforeTokenTransferHandler is
             ) {
                 revert Banned();
             }
-            SkinContainerComponentLayout memory skinContainerLayout;
             uint256[] memory mixins;
             SoulboundComponent soulboundComponent = SoulboundComponent(
                 _gameRegistry.getComponent(SOULBOUND_COMPONENT_ID)
             );
+
             for (uint256 idx = 0; idx < batchSize; idx++) {
                 uint256 tokenId = firstTokenId + idx;
                 uint256 entity = EntityLibrary.tokenToEntity(
@@ -87,11 +103,6 @@ contract ShipNFTBeforeTokenTransferHandler is
                 skinContainerLayout = SkinContainerComponent(
                     _gameRegistry.getComponent(SKIN_CONTAINER_COMPONENT_ID)
                 ).getLayoutValue(entity);
-
-                // Remove all equipped items from the ship
-                ItemsEquippedComponent(
-                    _gameRegistry.getComponent(ITEMS_EQUIPPED_COMPONENT_ID)
-                ).remove(entity);
                 // Mint equipped skin back to user
                 for (
                     uint256 i = 0;
