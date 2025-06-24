@@ -43,12 +43,18 @@ library TransformLibrary {
             ISubscriptionSystem(gameRegistry.getSystem(SUBSCRIPTION_SYSTEM_ID))
                 .checkHasActiveSubscription(VIP_SUBSCRIPTION_TYPE, account)
         ) {
-            VipTransformInputComponentLayout
-                memory vipTransformInputs = VipTransformInputComponent(
-                    gameRegistry.getComponent(VIP_TRANSFORM_INPUT_COMPONENT_ID)
-                ).getLayoutValue(transformEntity);
+            bool hasComponent = VipTransformInputComponent(
+                gameRegistry.getComponent(VIP_TRANSFORM_INPUT_COMPONENT_ID)
+            ).has(transformEntity);
 
-            if (vipTransformInputs.inputEntity.length > 0) {
+            if (hasComponent) {
+                VipTransformInputComponentLayout
+                    memory vipTransformInputs = VipTransformInputComponent(
+                        gameRegistry.getComponent(
+                            VIP_TRANSFORM_INPUT_COMPONENT_ID
+                        )
+                    ).getLayoutValue(transformEntity);
+
                 return
                     TransformInputComponentLayout({
                         inputType: vipTransformInputs.inputType,

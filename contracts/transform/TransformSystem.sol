@@ -31,18 +31,6 @@ import {IAccountXpSystem, ID as ACCOUNT_XP_SYSTEM_ID} from "../trade/IAccountXpS
 import {ID as ACCOUNT_SKILLS_XP_GRANTED_ID} from "../generated/components/AccountSkillsXpGrantedComponent.sol";
 import {ID as ACCOUNT_SKILL_REQUIREMENTS_ID} from "../generated/components/AccountSkillRequirementsComponent.sol";
 import {GameRegistryConsumerUpgradeable} from "../GameRegistryConsumerUpgradeable.sol";
-import {ValidatorTransformComponent, ID as VALIDATOR_TRANSFORM_COMPONENT_ID} from "../generated/components/ValidatorTransformComponent.sol";
-import {ISubscriptionSystem, ID as SUBSCRIPTION_SYSTEM_ID, VIP_SUBSCRIPTION_TYPE} from "../subscription/ISubscriptionSystem.sol";
-import {VipLootEntityReferenceComponent, ID as VIP_LOOT_ENTITY_REFERENCE_COMPONENT_ID} from "../generated/components/VipLootEntityReferenceComponent.sol";
-
-// Transform Validator Role
-bytes32 constant TRANSFORM_VALIDATOR_ROLE = keccak256(
-    "TRANSFORM_VALIDATOR_ROLE"
-);
-
-uint256 constant NULL_LOOT_ENTITY = uint256(
-    keccak256("game.piratenation.global.null_loot_entity")
-);
 
 contract TransformSystem is GameRegistryConsumerUpgradeable {
     // Struct to track and respond to VRF requests
@@ -129,9 +117,6 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     /// @notice Empty Transform Array
     error EmptyTransformArray();
 
-    /// @notice Not a Validator-only transform
-    error ValidatorOnlyTransform();
-
     /** PUBLIC **/
 
     /**
@@ -164,76 +149,6 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     }
 
     /**
-     * Starts a transform for a user using the validator role
-     *
-     * @param params Transform parameters for the transform (See struct definition)
-     * @param account Account to start the transform for
-     *
-     * @return returns transformInstanceEntity that was created to track this transform run
-     */
-    function startTransformUsingValidator(
-        TransformParams calldata params,
-        address account
-    )
-        external
-        nonReentrant
-        whenNotPaused
-        onlyRole(TRANSFORM_VALIDATOR_ROLE)
-        returns (uint256)
-    {
-        if (
-            ValidatorTransformComponent(
-                _gameRegistry.getComponent(VALIDATOR_TRANSFORM_COMPONENT_ID)
-            ).getValue(params.transformEntity) == false
-        ) {
-            revert ValidatorOnlyTransform();
-        }
-        return _startTransform(params, account);
-    }
-
-    /**
-     * Completes a transform for a user using the validator role
-     *
-     * @param transformInstanceEntity Transform instance to complete
-     * @param account Account to complete the transform for
-     */
-    function completeTransformUsingValidator(
-        uint256 transformInstanceEntity,
-        address account
-    ) external nonReentrant whenNotPaused onlyRole(TRANSFORM_VALIDATOR_ROLE) {
-        TransformInstanceComponentLayout
-            memory transformInstance = _getTransformInstance(
-                transformInstanceEntity
-            );
-        if (
-            ValidatorTransformComponent(
-                _gameRegistry.getComponent(VALIDATOR_TRANSFORM_COMPONENT_ID)
-            ).getValue(transformInstance.transformEntity) == false
-        ) {
-            revert ValidatorOnlyTransform();
-        }
-        // Make sure current account is the owner of the transform instance
-        if (account != transformInstance.account) {
-            revert CallerNotOwner(account, transformInstance.account);
-        }
-
-        ITransformRunnerSystem[] memory transformRunners = _getTransformRunners(
-            transformInstance.transformEntity
-        );
-
-        if (!_isCompleteable(account, transformRunners, transformInstance)) {
-            revert TransformNotCompleteable(transformInstanceEntity);
-        }
-
-        _completeTransform(
-            account,
-            transformRunners,
-            transformInstance,
-            transformInstanceEntity
-        );
-    }
-
-    /**
      * Starts a transform for a user with a given account
      *
      * @param params Transform parameters for the transform (See struct definition)
@@ -250,13 +165,6 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
         onlyRole(GAME_LOGIC_CONTRACT_ROLE)
         returns (uint256)
     {
-        if (
-            ValidatorTransformComponent(
-                _gameRegistry.getComponent(VALIDATOR_TRANSFORM_COMPONENT_ID)
-            ).getValue(params.transformEntity) == true
-        ) {
-            revert ValidatorOnlyTransform();
-        }
         return _startTransform(params, account);
     }
 
@@ -270,13 +178,6 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
     function startTransform(
         TransformParams calldata params
     ) external nonReentrant whenNotPaused returns (uint256) {
-        if (
-            ValidatorTransformComponent(
-                _gameRegistry.getComponent(VALIDATOR_TRANSFORM_COMPONENT_ID)
-            ).getValue(params.transformEntity) == true
-        ) {
-            revert ValidatorOnlyTransform();
-        }
         address account = _getPlayerAccount(_msgSender());
         return _startTransform(params, account);
     }
@@ -295,13 +196,7 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
             memory transformInstance = _getTransformInstance(
                 transformInstanceEntity
             );
-        if (
-            ValidatorTransformComponent(
-                _gameRegistry.getComponent(VALIDATOR_TRANSFORM_COMPONENT_ID)
-            ).getValue(transformInstance.transformEntity) == true
-        ) {
-            revert ValidatorOnlyTransform();
-        }
+
         // Make sure current account is the owner of the transform instance
         if (account != transformInstance.account) {
             revert CallerNotOwner(account, transformInstance.account);
@@ -596,22 +491,7 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
                 lootEntityArrayComponentAddress,
                 transformInstance.transformEntity
             );
-        // Grant VIP loot if the user has a VIP subscription and a VIP loot entity is set
-        uint256 vipLootEntity = VipLootEntityReferenceComponent(
-            _gameRegistry.getComponent(VIP_LOOT_ENTITY_REFERENCE_COMPONENT_ID)
-        ).getValue(transformInstance.transformEntity);
-        if (vipLootEntity != 0 && vipLootEntity != NULL_LOOT_ENTITY) {
-            if (
-                ISubscriptionSystem(
-                    _gameRegistry.getSystem(SUBSCRIPTION_SYSTEM_ID)
-                ).checkHasActiveSubscription(VIP_SUBSCRIPTION_TYPE, account)
-            ) {
-                loots = LootArrayComponentLibrary.convertLootEntityArrayToLoot(
-                    lootEntityArrayComponentAddress,
-                    vipLootEntity
-                );
-            }
-        }
+
         bool lootNeedsVrf = ILootSystemV2(
             _gameRegistry.getSystem(LOOT_SYSTEM_ID)
         ).validateLoots(loots);
@@ -675,13 +555,6 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
             memory transformInstance = _getTransformInstance(
                 transformInstanceEntity
             );
-        if (
-            ValidatorTransformComponent(
-                _gameRegistry.getComponent(VALIDATOR_TRANSFORM_COMPONENT_ID)
-            ).getValue(transformInstance.transformEntity) == true
-        ) {
-            revert ValidatorOnlyTransform();
-        }
 
         // Make sure current account is the owner of the transform instance
         if (account != transformInstance.account) {
@@ -868,55 +741,36 @@ contract TransformSystem is GameRegistryConsumerUpgradeable {
 
         // Grant loot if we have any successful transforms
         if (numSuccess > 0) {
+            address lootEntityArrayComponentAddress = _gameRegistry
+                .getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID);
             ILootSystemV2.Loot[] memory loots = LootArrayComponentLibrary
                 .convertLootEntityArrayToLoot(
-                    _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID),
+                    lootEntityArrayComponentAddress,
                     transformEntity
                 );
-            // Grant VIP loot if the user has a VIP subscription and a VIP loot entity is set
-            uint256 vipLootEntity = VipLootEntityReferenceComponent(
-                _gameRegistry.getComponent(
-                    VIP_LOOT_ENTITY_REFERENCE_COMPONENT_ID
-                )
-            ).getValue(transformEntity);
-            if (vipLootEntity != 0 && vipLootEntity != NULL_LOOT_ENTITY) {
-                if (
-                    ISubscriptionSystem(
-                        _gameRegistry.getSystem(SUBSCRIPTION_SYSTEM_ID)
-                    ).checkHasActiveSubscription(VIP_SUBSCRIPTION_TYPE, account)
-                ) {
-                    loots = LootArrayComponentLibrary
-                        .convertLootEntityArrayToLoot(
-                            _gameRegistry.getComponent(
-                                LOOT_ENTITY_ARRAY_COMPONENT_ID
-                            ),
-                            vipLootEntity
-                        );
-                }
-            }
 
-            if (loots.length > 0) {
-                if (nextRandomWord > 0) {
-                    for (uint8 grantIdx; grantIdx < numSuccess; grantIdx++) {
-                        nextRandomWord = RandomLibrary.generateNextRandomWord(
-                            nextRandomWord
-                        );
-                        ILootSystemV2(_gameRegistry.getSystem(LOOT_SYSTEM_ID))
-                            .grantLootWithRandomWord(
-                                account,
-                                loots,
-                                nextRandomWord
-                            );
-                    }
-                } else {
-                    // No randomness, simply grant the loot
-                    ILootSystemV2(_gameRegistry.getSystem(LOOT_SYSTEM_ID))
-                        .batchGrantLootWithoutRandomness(
-                            account,
-                            loots,
-                            numSuccess
-                        );
+            ILootSystemV2 lootSystem = ILootSystemV2(
+                _gameRegistry.getSystem(LOOT_SYSTEM_ID)
+            );
+
+            if (nextRandomWord > 0) {
+                for (uint8 grantIdx; grantIdx < numSuccess; grantIdx++) {
+                    nextRandomWord = RandomLibrary.generateNextRandomWord(
+                        nextRandomWord
+                    );
+                    lootSystem.grantLootWithRandomWord(
+                        account,
+                        loots,
+                        nextRandomWord
+                    );
                 }
+            } else {
+                // No randomness, simply grant the loot
+                lootSystem.batchGrantLootWithoutRandomness(
+                    account,
+                    loots,
+                    numSuccess
+                );
             }
 
             if (

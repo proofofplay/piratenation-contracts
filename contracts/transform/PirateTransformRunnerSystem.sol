@@ -158,6 +158,26 @@ contract PirateTransformRunnerSystem is BaseTransformRunnerSystem {
         uint256 transformInstanceEntity,
         uint256 randomWord
     ) external override returns (uint256 nextRandomWord) {
+        LootEntityArrayComponentLayout
+            memory transformInstanceInputs = _getTransformInstanceInputs(
+                transformInstanceEntity
+            );
+
+        (address tokenContract, uint256 tokenId) = EntityLibrary.entityToToken(
+            transformInstanceInputs.lootEntity[0]
+        );
+
+        // TODO: Temporary, remove when leaderboards are implemented
+        // NOTE: must be emitted AFTER pgld has been minted for subgraph to fetch Event entity
+        emit PirateTransformCompleted(
+            transformInstance.account,
+            transformInstanceEntity,
+            transformInstance.count,
+            transformInstance.numSuccess,
+            tokenContract,
+            tokenId
+        );
+
         return randomWord;
     }
 

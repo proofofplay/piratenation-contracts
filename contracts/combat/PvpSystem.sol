@@ -22,8 +22,7 @@ import {Uint256ArrayComponent, Layout as Uint256ArrayComponentLayout, ID as UINT
 import {TimeRangeComponent, ID as TIME_RANGE_COMPONENT_ID} from "../generated/components/TimeRangeComponent.sol";
 import {PvpSummaryComponent, Layout as PvpSummaryComponentLayout, ID as PVP_SUMMARY_COMPONENT_ID} from "../generated/components/PvpSummaryComponent.sol";
 import {TagsComponent, ID as TAGS_COMPONENT_ID} from "../generated/components/TagsComponent.sol";
-import {CounterComponent, ID as COUNTER_COMPONENT_ID} from "../generated/components/CounterComponent.sol";
-import {LevelSystem, ID as LEVEL_SYSTEM_ID} from "../level/LevelSystem.sol";
+import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 
 // System ID for the PvP system
 uint256 constant ID = uint256(keccak256("game.piratenation.pvpsystem"));
@@ -43,21 +42,6 @@ uint256 constant PVP_TROPHY_CAP_CHECK_ARRAY = uint256(
 // Global : PVP_TROPHY_CAP_BUMP_ARRAY
 uint256 constant PVP_TROPHY_CAP_BUMP_ARRAY = uint256(
     keccak256("game.piratenation.global.pvp_trophy_cap_bump_array")
-);
-
-// Global : DAILY REWARDS
-uint256 constant PVP_DAILY_REWARDS = uint256(
-    keccak256("game.piratenation.global.pvp_daily_rewards")
-);
-
-// Global : PVP_TROPHY_CLIP_CHECK_ARRAY
-uint256 constant PVP_TROPHY_CLIP_CHECK_ARRAY = uint256(
-    keccak256("game.piratenation.global.pvp_trophy_clip_check_array")
-);
-
-// Global : PVP_TROPHY_CLIP_ARRAY
-uint256 constant PVP_TROPHY_CLIP_ARRAY = uint256(
-    keccak256("game.piratenation.global.pvp_trophy_clip_array")
 );
 
 /** STRUCTS **/
@@ -89,12 +73,6 @@ struct TrophyAdjustmentResult {
     uint256 oldLeague;
     uint256 newLeague;
     uint256 trophyChange;
-}
-
-/// @notice Player related data
-struct PlayerData {
-    address playerAddress;
-    uint256 pirateEntity;
 }
 
 /** ERRORS **/
@@ -158,15 +136,15 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     /**
      * Post the match results to the PvP system
      *
-     * @param playerData The player's data
+     * @param playerOneAddress The address of the player
      * @param matchDataResult The result of the match and the opponent's data
      */
-    function postMatchResultsV2(
-        PlayerData memory playerData,
+    function postMatchResults(
+        address playerOneAddress,
         MatchDataResult memory matchDataResult
     ) external onlyRole(PVP_VALIDATOR_ROLE) {
         // Validate inputs
-        _validateInputs(playerData.playerAddress, matchDataResult);
+        _validateInputs(playerOneAddress, matchDataResult);
         UserPvpDataComponent userPvpDataComponent = UserPvpDataComponent(
             _gameRegistry.getComponent(USER_PVP_DATA_COMPONENT_ID)
         );
@@ -177,15 +155,17 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         if (pvpSeasonId == 0) {
             revert NoPvpSeasonIdSet();
         }
-        // If Pvp Season is active then grant/burn trophies and win/loss count.
-        // If Pvp Season is not active then still update rating and grant daily rewards
-        bool isPvpSeasonActive = TimeRangeLibrary.checkWithinTimeRange(
-            _gameRegistry.getComponent(TIME_RANGE_COMPONENT_ID),
-            pvpSeasonId
-        );
-
+        // If the PvP season is not active, return, no rewards or penalties or rating updates
+        if (
+            TimeRangeLibrary.checkWithinTimeRange(
+                _gameRegistry.getComponent(TIME_RANGE_COMPONENT_ID),
+                pvpSeasonId
+            ) == false
+        ) {
+            return;
+        }
         uint256 playerSeasonAddressEntity = EntityLibrary.accountSubEntity(
-            playerData.playerAddress,
+            playerOneAddress,
             pvpSeasonId
         );
         UserPvpDataComponentLayout memory playerPvpData = _initializePlayer(
@@ -218,23 +198,20 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         playerPvpData.matchmakingRatingVolatility = playerOneResult
             .newVolatility;
         playerPvpData.matchmakingRatingLastUpdate = uint32(block.timestamp);
-        if (isPvpSeasonActive == true) {
-            if (matchDataResult.outcome == VICTORY) {
-                playerPvpData.winCount++;
-            } else {
-                playerPvpData.lossCount++;
-            }
+        if (matchDataResult.outcome == VICTORY) {
+            playerPvpData.winCount++;
+        } else {
+            playerPvpData.lossCount++;
         }
         // Update player one's data in the component
         UserPvpDataComponent(
             _gameRegistry.getComponent(USER_PVP_DATA_COMPONENT_ID)
         ).setLayoutValue(playerSeasonAddressEntity, playerPvpData);
         // Now handle the trophy adjustment
-        TrophyAdjustmentResult memory trophyAdjustmentResult;
-        if (isPvpSeasonActive == true) {
-            trophyAdjustmentResult = _handleTrophyAdjustment(
+        TrophyAdjustmentResult
+            memory trophyAdjustmentResult = _handleTrophyAdjustment(
                 TrophyAdjustmentInput({
-                    playerAddress: playerData.playerAddress,
+                    playerAddress: playerOneAddress,
                     oldRatingValue: oldRating,
                     newRatingValue: playerPvpData.matchmakingRating,
                     ratingDifference: (playerPvpData.matchmakingRating -
@@ -243,50 +220,31 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
                     outcome: matchDataResult.outcome
                 })
             );
-        }
         uint256[] memory lootGrantedToRecord;
         // Handle winner ranking up if they won and moved up a league
         if (
             matchDataResult.outcome == VICTORY &&
-            trophyAdjustmentResult.newLeague >
-            trophyAdjustmentResult.oldLeague &&
-            isPvpSeasonActive == true
+            trophyAdjustmentResult.newLeague > trophyAdjustmentResult.oldLeague
         ) {
             lootGrantedToRecord = _handleRankedClaim(
-                playerData.playerAddress,
+                playerOneAddress,
                 playerSeasonAddressEntity,
                 trophyAdjustmentResult.newLeague,
                 trophyAdjustmentResult.oldLeague
             );
         }
-        if (matchDataResult.outcome == VICTORY) {
-            uint256 dailyRewardsEntity = _handleDailyRewards(playerData);
-            if (dailyRewardsEntity != 0) {
-                // Resize lootGrantedToRecord to include daily rewards entity
-                uint256[] memory newLootGrantedToRecord = new uint256[](
-                    lootGrantedToRecord.length + 1
-                );
-                for (uint256 i = 0; i < lootGrantedToRecord.length; i++) {
-                    newLootGrantedToRecord[i] = lootGrantedToRecord[i];
-                }
-                newLootGrantedToRecord[
-                    lootGrantedToRecord.length
-                ] = dailyRewardsEntity;
-                lootGrantedToRecord = newLootGrantedToRecord;
-            }
-        }
         // Store the battle summary
         _storeBattleSummaryWithTag(
             matchDataResult,
             pvpSeasonId,
-            playerData.playerAddress,
+            playerOneAddress,
             trophyAdjustmentResult.trophyChange,
             lootGrantedToRecord
         );
         // Emit the end match event
         _emitEndMatch(
             matchDataResult.gameSessionId,
-            playerData.playerAddress,
+            playerOneAddress,
             matchDataResult.outcome,
             matchDataResult.opponentAddress,
             matchDataResult.ipfsUrl
@@ -524,12 +482,6 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             trophyAmountToGrantOrBurn += _handleTrophyCapAndBump(
                 currentTrophyCount,
                 trophyAdjustmentInput.oldRatingValue
-            );
-            // Handle clipping if user trophy count is greater than the MMR
-            trophyAmountToGrantOrBurn = _handleTrophyClip(
-                currentTrophyCount,
-                trophyAdjustmentInput.oldRatingValue,
-                trophyAmountToGrantOrBurn
             );
             // Enforce ceiling for win
             if (
@@ -826,94 +778,5 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
             }
         }
         return 0;
-    }
-
-    /**
-     * Handle trophy clipping if user trophy count is greater than the MMR
-     */
-    function _handleTrophyClip(
-        uint256 currentTrophyCount,
-        int256 oldRatingValue,
-        uint256 trophyAmountToGrantOrBurn
-    ) internal view returns (uint256) {
-        uint256[] memory trophyClipCheckArray = Uint256ArrayComponent(
-            _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
-        ).getValue(PVP_TROPHY_CLIP_CHECK_ARRAY);
-        uint256[] memory trophyClipArray = Uint256ArrayComponent(
-            _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
-        ).getValue(PVP_TROPHY_CLIP_ARRAY);
-        if (trophyClipCheckArray.length != 0 && trophyClipArray.length != 0) {
-            // Only run clip check if the user has more trophies than the MMR, this lets us avoid negative calculations
-            if (
-                currentTrophyCount >
-                (uint256(Glicko2Library.abs(oldRatingValue)) / 1000)
-            ) {
-                for (uint256 i = 0; i < trophyClipCheckArray.length; i++) {
-                    if (
-                        currentTrophyCount -
-                            (uint256(Glicko2Library.abs(oldRatingValue)) /
-                                1000) <=
-                        trophyClipCheckArray[i]
-                    ) {
-                        return trophyClipArray[i];
-                    }
-                }
-            }
-        }
-        // Otherwise return the trophy amount to grant or burn
-        return trophyAmountToGrantOrBurn;
-    }
-
-    /**
-     * Handle the daily rewards
-     * @param playerData The player's data
-     * @return rewardEntity The entity ID of the reward
-     */
-    function _handleDailyRewards(
-        PlayerData memory playerData
-    ) internal returns (uint256 rewardEntity) {
-        ILootSystemV2.Loot[] memory loot = LootArrayComponentLibrary
-            .convertLootEntityArrayToLoot(
-                _gameRegistry.getComponent(LOOT_ENTITY_ARRAY_COMPONENT_ID),
-                PVP_DAILY_REWARDS
-            );
-        uint256[] memory rewardInfo = Uint256ArrayComponent(
-            _gameRegistry.getComponent(UINT256_ARRAY_COMPONENT_ID)
-        ).getValue(PVP_DAILY_REWARDS);
-        // If daily limit is set, handle daily rewards
-        if (rewardInfo.length > 0) {
-            uint256 dailyRewardsEntity = EntityLibrary.accountSubEntity(
-                playerData.playerAddress,
-                block.timestamp / 1 days
-            );
-            CounterComponent counterComponent = CounterComponent(
-                _gameRegistry.getComponent(COUNTER_COMPONENT_ID)
-            );
-            uint256 dailyRewardsCount = counterComponent.getValue(
-                dailyRewardsEntity
-            );
-            if (dailyRewardsCount < rewardInfo[0]) {
-                if (rewardInfo.length > 1) {
-                    LevelSystem(_getSystem(LEVEL_SYSTEM_ID)).grantXPToEntity(
-                        playerData.pirateEntity,
-                        rewardInfo[1]
-                    );
-                }
-                if (loot.length > 0) {
-                    ILootSystemV2(_getSystem(LOOT_SYSTEM_V2_ID)).grantLoot(
-                        playerData.playerAddress,
-                        loot
-                    );
-                    dailyRewardsCount++;
-                    counterComponent.setValue(
-                        dailyRewardsEntity,
-                        dailyRewardsCount
-                    );
-                    rewardEntity = PVP_DAILY_REWARDS;
-                }
-            } else {
-                rewardEntity = 0;
-            }
-        }
     }
 }
