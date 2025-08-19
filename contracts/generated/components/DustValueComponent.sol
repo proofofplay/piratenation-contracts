@@ -8,18 +8,14 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.marketplaceordercomponent.v1")
+    keccak256("game.piratenation.dustvaluecomponent.v1")
 );
 
 struct Layout {
-    uint256 listingId;
-    uint256[] assetIds;
-    uint256[] quantitiesFilled;
-    uint256 orderTimestamp;
-    address taker;
+    uint256 value;
 }
 
-library MarketplaceOrderComponentStorage {
+library DustValueComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -41,10 +37,10 @@ library MarketplaceOrderComponentStorage {
 }
 
 /**
- * @title MarketplaceOrderComponent
- * @dev Order data for a marketplace order
+ * @title DustValueComponent
+ * @dev The dust value of an entity
  */
-contract MarketplaceOrderComponent is BaseStorageComponentV2 {
+contract DustValueComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -63,28 +59,12 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
         override
         returns (string[] memory keys, TypesLibrary.SchemaValue[] memory values)
     {
-        keys = new string[](5);
-        values = new TypesLibrary.SchemaValue[](5);
+        keys = new string[](1);
+        values = new TypesLibrary.SchemaValue[](1);
 
-        // The ID of the marketplace listing being purchased for this order
-        keys[0] = "listing_id";
+        // The dust value of an entity
+        keys[0] = "value";
         values[0] = TypesLibrary.SchemaValue.UINT256;
-
-        // The asset IDs being purchased
-        keys[1] = "asset_ids";
-        values[1] = TypesLibrary.SchemaValue.UINT256_ARRAY;
-
-        // The quantities filled
-        keys[2] = "quantities_filled";
-        values[2] = TypesLibrary.SchemaValue.UINT256_ARRAY;
-
-        // The timestamp of the order
-        keys[3] = "order_timestamp";
-        values[3] = TypesLibrary.SchemaValue.UINT256;
-
-        // The address of the taker
-        keys[4] = "taker";
-        values[4] = TypesLibrary.SchemaValue.ADDRESS;
     }
 
     /**
@@ -104,24 +84,13 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param listingId The ID of the marketplace listing being purchased for this order
-     * @param assetIds The asset IDs being purchased
-     * @param quantitiesFilled The quantities filled
-     * @param orderTimestamp The timestamp of the order
-     * @param taker The address of the taker
+     * @param value The dust value of an entity
      */
     function setValue(
         uint256 entity,
-        uint256 listingId,
-        uint256[] memory assetIds,
-        uint256[] memory quantitiesFilled,
-        uint256 orderTimestamp,
-        address taker
+        uint256 value
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        _setValue(
-            entity,
-            Layout(listingId, assetIds, quantitiesFilled, orderTimestamp, taker)
-        );
+        _setValue(entity, Layout(value));
     }
 
     /**
@@ -159,44 +128,23 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = MarketplaceOrderComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        value = DustValueComponentStorage.layout().entityIdToStruct[entity];
     }
 
     /**
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return listingId The ID of the marketplace listing being purchased for this order
-     * @return assetIds The asset IDs being purchased
-     * @return quantitiesFilled The quantities filled
-     * @return orderTimestamp The timestamp of the order
-     * @return taker The address of the taker
+     * @return value The dust value of an entity
      */
     function getValue(
         uint256 entity
-    )
-        external
-        view
-        virtual
-        returns (
-            uint256 listingId,
-            uint256[] memory assetIds,
-            uint256[] memory quantitiesFilled,
-            uint256 orderTimestamp,
-            address taker
-        )
-    {
+    ) external view virtual returns (uint256 value) {
         if (has(entity)) {
-            Layout memory s = MarketplaceOrderComponentStorage
+            Layout memory s = DustValueComponentStorage
                 .layout()
                 .entityIdToStruct[entity];
-            (listingId, assetIds, quantitiesFilled, orderTimestamp, taker) = abi
-                .decode(
-                    _getEncodedValues(s),
-                    (uint256, uint256[], uint256[], uint256, address)
-                );
+            (value) = abi.decode(_getEncodedValues(s), (uint256));
         }
     }
 
@@ -209,17 +157,13 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = MarketplaceOrderComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout storage s = DustValueComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
 
         // ABI Encode all fields of the struct and add to values array
-        values = new bytes[](5);
-        values[0] = abi.encode(s.listingId);
-        values[1] = abi.encode(s.assetIds);
-        values[2] = abi.encode(s.quantitiesFilled);
-        values[3] = abi.encode(s.orderTimestamp);
-        values[4] = abi.encode(s.taker);
+        values = new bytes[](1);
+        values[0] = abi.encode(s.value);
     }
 
     /**
@@ -230,9 +174,9 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = MarketplaceOrderComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout memory s = DustValueComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
         value = _getEncodedValues(s);
     }
 
@@ -245,19 +189,10 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = MarketplaceOrderComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
-        (
-            s.listingId,
-            s.assetIds,
-            s.quantitiesFilled,
-            s.orderTimestamp,
-            s.taker
-        ) = abi.decode(
-            value,
-            (uint256, uint256[], uint256[], uint256, address)
-        );
+        Layout memory s = DustValueComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
+        (s.value) = abi.decode(value, (uint256));
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -278,19 +213,10 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = MarketplaceOrderComponentStorage
+            Layout memory s = DustValueComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
-            (
-                s.listingId,
-                s.assetIds,
-                s.quantitiesFilled,
-                s.orderTimestamp,
-                s.taker
-            ) = abi.decode(
-                values[i],
-                (uint256, uint256[], uint256[], uint256, address)
-            );
+            (s.value) = abi.decode(values[i], (uint256));
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -306,9 +232,7 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete MarketplaceOrderComponentStorage.layout().entityIdToStruct[
-            entity
-        ];
+        delete DustValueComponentStorage.layout().entityIdToStruct[entity];
         _emitRemoveBytes(entity);
     }
 
@@ -322,7 +246,7 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete MarketplaceOrderComponentStorage.layout().entityIdToStruct[
+            delete DustValueComponentStorage.layout().entityIdToStruct[
                 entities[i]
             ];
         }
@@ -341,43 +265,23 @@ contract MarketplaceOrderComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = MarketplaceOrderComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout storage s = DustValueComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
 
-        s.listingId = value.listingId;
-        s.assetIds = value.assetIds;
-        s.quantitiesFilled = value.quantitiesFilled;
-        s.orderTimestamp = value.orderTimestamp;
-        s.taker = value.taker;
+        s.value = value.value;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
         _setValueToStorage(entity, value);
 
         // ABI Encode all native types of the struct
-        _emitSetBytes(
-            entity,
-            abi.encode(
-                value.listingId,
-                value.assetIds,
-                value.quantitiesFilled,
-                value.orderTimestamp,
-                value.taker
-            )
-        );
+        _emitSetBytes(entity, abi.encode(value.value));
     }
 
     function _getEncodedValues(
         Layout memory value
     ) internal pure returns (bytes memory) {
-        return
-            abi.encode(
-                value.listingId,
-                value.assetIds,
-                value.quantitiesFilled,
-                value.orderTimestamp,
-                value.taker
-            );
+        return abi.encode(value.value);
     }
 }

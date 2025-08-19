@@ -8,15 +8,14 @@ import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/compon
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
 uint256 constant ID = uint256(
-    keccak256("game.piratenation.marketplacelistingdynamicdatacomponent.v1")
+    keccak256("game.piratenation.listingcancelledreplaycomponent.v1")
 );
 
 struct Layout {
-    uint256[] quantitiesRemaining;
-    uint32 listingStatus;
+    uint256 value;
 }
 
-library MarketplaceListingDynamicDataComponentStorage {
+library ListingCancelledReplayComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -38,10 +37,10 @@ library MarketplaceListingDynamicDataComponentStorage {
 }
 
 /**
- * @title MarketplaceListingDynamicDataComponent
- * @dev Dynamic data for a marketplace listing
+ * @title ListingCancelledReplayComponent
+ * @dev Track the timestamp of when a listing has been cancelled for replay protection
  */
-contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
+contract ListingCancelledReplayComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -60,16 +59,12 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
         override
         returns (string[] memory keys, TypesLibrary.SchemaValue[] memory values)
     {
-        keys = new string[](2);
-        values = new TypesLibrary.SchemaValue[](2);
+        keys = new string[](1);
+        values = new TypesLibrary.SchemaValue[](1);
 
-        // The quantities remaining to be sold
-        keys[0] = "quantities_remaining";
-        values[0] = TypesLibrary.SchemaValue.UINT256_ARRAY;
-
-        // The status of the listing
-        keys[1] = "listing_status";
-        values[1] = TypesLibrary.SchemaValue.UINT32;
+        // The timestamp of the listing cancellation
+        keys[0] = "value";
+        values[0] = TypesLibrary.SchemaValue.UINT256;
     }
 
     /**
@@ -89,15 +84,13 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param quantitiesRemaining The quantities remaining to be sold
-     * @param listingStatus The status of the listing
+     * @param value The timestamp of the listing cancellation
      */
     function setValue(
         uint256 entity,
-        uint256[] memory quantitiesRemaining,
-        uint32 listingStatus
+        uint256 value
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        _setValue(entity, Layout(quantitiesRemaining, listingStatus));
+        _setValue(entity, Layout(value));
     }
 
     /**
@@ -135,7 +128,7 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = MarketplaceListingDynamicDataComponentStorage
+        value = ListingCancelledReplayComponentStorage
             .layout()
             .entityIdToStruct[entity];
     }
@@ -144,25 +137,16 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return quantitiesRemaining The quantities remaining to be sold
-     * @return listingStatus The status of the listing
+     * @return value The timestamp of the listing cancellation
      */
     function getValue(
         uint256 entity
-    )
-        external
-        view
-        virtual
-        returns (uint256[] memory quantitiesRemaining, uint32 listingStatus)
-    {
+    ) external view virtual returns (uint256 value) {
         if (has(entity)) {
-            Layout memory s = MarketplaceListingDynamicDataComponentStorage
+            Layout memory s = ListingCancelledReplayComponentStorage
                 .layout()
                 .entityIdToStruct[entity];
-            (quantitiesRemaining, listingStatus) = abi.decode(
-                _getEncodedValues(s),
-                (uint256[], uint32)
-            );
+            (value) = abi.decode(_getEncodedValues(s), (uint256));
         }
     }
 
@@ -175,14 +159,13 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = MarketplaceListingDynamicDataComponentStorage
+        Layout storage s = ListingCancelledReplayComponentStorage
             .layout()
             .entityIdToStruct[entity];
 
         // ABI Encode all fields of the struct and add to values array
-        values = new bytes[](2);
-        values[0] = abi.encode(s.quantitiesRemaining);
-        values[1] = abi.encode(s.listingStatus);
+        values = new bytes[](1);
+        values[0] = abi.encode(s.value);
     }
 
     /**
@@ -193,7 +176,7 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = MarketplaceListingDynamicDataComponentStorage
+        Layout memory s = ListingCancelledReplayComponentStorage
             .layout()
             .entityIdToStruct[entity];
         value = _getEncodedValues(s);
@@ -208,13 +191,10 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = MarketplaceListingDynamicDataComponentStorage
+        Layout memory s = ListingCancelledReplayComponentStorage
             .layout()
             .entityIdToStruct[entity];
-        (s.quantitiesRemaining, s.listingStatus) = abi.decode(
-            value,
-            (uint256[], uint32)
-        );
+        (s.value) = abi.decode(value, (uint256));
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -235,13 +215,10 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = MarketplaceListingDynamicDataComponentStorage
+            Layout memory s = ListingCancelledReplayComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
-            (s.quantitiesRemaining, s.listingStatus) = abi.decode(
-                values[i],
-                (uint256[], uint32)
-            );
+            (s.value) = abi.decode(values[i], (uint256));
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -257,9 +234,9 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete MarketplaceListingDynamicDataComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        delete ListingCancelledReplayComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
         _emitRemoveBytes(entity);
     }
 
@@ -273,7 +250,7 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete MarketplaceListingDynamicDataComponentStorage
+            delete ListingCancelledReplayComponentStorage
                 .layout()
                 .entityIdToStruct[entities[i]];
         }
@@ -292,27 +269,23 @@ contract MarketplaceListingDynamicDataComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = MarketplaceListingDynamicDataComponentStorage
+        Layout storage s = ListingCancelledReplayComponentStorage
             .layout()
             .entityIdToStruct[entity];
 
-        s.quantitiesRemaining = value.quantitiesRemaining;
-        s.listingStatus = value.listingStatus;
+        s.value = value.value;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
         _setValueToStorage(entity, value);
 
         // ABI Encode all native types of the struct
-        _emitSetBytes(
-            entity,
-            abi.encode(value.quantitiesRemaining, value.listingStatus)
-        );
+        _emitSetBytes(entity, abi.encode(value.value));
     }
 
     function _getEncodedValues(
         Layout memory value
     ) internal pure returns (bytes memory) {
-        return abi.encode(value.quantitiesRemaining, value.listingStatus);
+        return abi.encode(value.value);
     }
 }

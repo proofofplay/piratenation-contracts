@@ -177,9 +177,12 @@ contract TradeableGameItems is
         //reverts if no trade license
         _checkTradeLicense(account);
 
-        GameItems gameItems = GameItems(_gameRegistry.getSystem(GAME_ITEMS_ID));
+        address gameItemsAddress = _gameRegistry.getSystem(GAME_ITEMS_ID);
         uint256[] memory ids = new uint256[](MAX_TOKEN_ID);
         uint256[] memory totalAmounts = new uint256[](MAX_TOKEN_ID);
+        address traitsProviderAddress = _gameRegistry.getSystem(
+            TRAITS_PROVIDER_ID
+        );
 
         TradeLicenseExemptComponent tleComponent = TradeLicenseExemptComponent(
             _gameRegistry.getComponent(TRADE_LICENSE_EXEMPT_COMPONENT_ID)
@@ -187,19 +190,25 @@ contract TradeableGameItems is
 
         uint256 nextIndex;
         uint256 bal;
+        bool isExempt;
         for (uint256 i = 1; i <= MAX_TOKEN_ID; i++) {
-            bool isExempt = tleComponent.getValue(
-                EntityLibrary.tokenToEntity(
-                    _gameRegistry.getSystem(GAME_ITEMS_ID),
-                    i
-                )
+            isExempt = tleComponent.getValue(
+                EntityLibrary.tokenToEntity(gameItemsAddress, i)
             );
             // Skip if exempt or soulbound
-            if (isExempt || _checkSoulbound(i) == true) {
+            if (
+                isExempt ||
+                _checkSoulboundGasEfficient(
+                    i,
+                    traitsProviderAddress,
+                    gameItemsAddress
+                ) ==
+                true
+            ) {
                 continue;
             }
 
-            bal = gameItems.balanceOf(account, i);
+            bal = GameItems(gameItemsAddress).balanceOf(account, i);
             if (bal > 0) {
                 ids[nextIndex] = i;
                 totalAmounts[nextIndex] = bal;
@@ -576,6 +585,23 @@ contract TradeableGameItems is
             // Here we check if sender if so we burn and emit new event
             _emitTransferEvent(from, to, ids, amounts);
         }
+    }
+
+    function _checkSoulboundGasEfficient(
+        uint256 tokenId,
+        address traitsProviderAddress,
+        address gameItemsAddress
+    ) internal view returns (bool) {
+        if (
+            ITraitsProvider(traitsProviderAddress).getTraitBool(
+                gameItemsAddress,
+                tokenId,
+                SOULBOUND_TRAIT_ID
+            ) == true
+        ) {
+            return true;
+        }
+        return false;
     }
 
     function _checkSoulbound(uint256 tokenId) internal view returns (bool) {

@@ -15,6 +15,9 @@ import {TransformInstanceComponent, Layout as TransformInstanceComponentLayout, 
 import {IGameItems, ID as GAME_ITEMS_ID} from "../tokens/gameitems/IGameItems.sol";
 import {Uint256Component, ID as UINT256_COMPONENT_ID} from "../generated/components/Uint256Component.sol";
 import {LastCombatTrackerComponent, Layout as LastCombatTrackerComponentLayout, ID as LAST_COMBAT_TRACKER_COMPONENT_ID} from "../generated/components/LastCombatTrackerComponent.sol";
+import {TimeRangeLibrary} from "../core/TimeRangeLibrary.sol";
+import {ID as TIME_RANGE_COMPONENT_ID} from "../generated/components/TimeRangeComponent.sol";
+import {ScoreComponent, ID as SCORE_COMPONENT_ID} from "../generated/components/ScoreComponent.sol";
 
 uint256 constant ID = uint256(
     keccak256("game.piratenation.roguelitetransformrunner")
@@ -117,6 +120,29 @@ contract RogueLiteTransformRunner is BaseTransformRunnerSystem {
                 transformInstance.transformEntity,
                 true
             );
+            // Record the last combat data
+            LastCombatTrackerComponent(
+                _gameRegistry.getComponent(LAST_COMBAT_TRACKER_COMPONENT_ID)
+            ).setLayoutValue(
+                    EntityLibrary.addressToEntity(transformInstance.account),
+                    LastCombatTrackerComponentLayout({
+                        transformInstanceEntity: transformInstanceEntity,
+                        pirateEntity: 0,
+                        shipEntity: 0,
+                        shipHealth: 0,
+                        cardsToPersist: new string[](0)
+                    })
+                );
+            // Clear out the score component
+            ScoreComponent(_gameRegistry.getComponent(SCORE_COMPONENT_ID))
+                .remove(
+                    EntityLibrary.accountSubEntity(
+                        transformInstance.account,
+                        EntityBaseComponent(
+                            _gameRegistry.getComponent(ENTITY_BASE_COMPONENT_ID)
+                        ).getValue(ID)
+                    )
+                );
             // Return immediately
             return (false, false);
         }
@@ -148,7 +174,16 @@ contract RogueLiteTransformRunner is BaseTransformRunnerSystem {
 
         // Game server passes data as a boolean, true if battle won and false if battle lost
         BattleData memory battleData = abi.decode(params.data, (BattleData));
-        if (battleData.battleWon == true) {
+        if (
+            battleData.battleWon == true &&
+            TimeRangeLibrary.checkWithinTimeRange(
+                _gameRegistry.getComponent(TIME_RANGE_COMPONENT_ID),
+                EntityBaseComponent(
+                    _gameRegistry.getComponent(ENTITY_BASE_COMPONENT_ID)
+                ).getValue(ID)
+            )
+        ) {
+            // Only handle trophies if the season is active and the battle was won
             _handleTrophies(battleData.totalScore, transformInstance.account);
         }
         // Set the last transform tracker
@@ -293,15 +328,34 @@ contract RogueLiteTransformRunner is BaseTransformRunnerSystem {
             (, uint256 tokenId) = EntityLibrary.entityToToken(
                 progressionTokenEntity
             );
+            uint256 scoreTrackerEntity = EntityLibrary.accountSubEntity(
+                account,
+                EntityBaseComponent(
+                    _gameRegistry.getComponent(ENTITY_BASE_COMPONENT_ID)
+                ).getValue(ID)
+            );
+            ScoreComponent scoreComponent = ScoreComponent(
+                _gameRegistry.getComponent(SCORE_COMPONENT_ID)
+            );
+            uint256 newSumScore = scoreComponent.getValue(scoreTrackerEntity) +
+                totalScore;
+            scoreComponent.setValue(scoreTrackerEntity, newSumScore);
             uint256 currentTrophies = IGameItems(
                 _gameRegistry.getSystem(GAME_ITEMS_ID)
             ).balanceOf(account, tokenId);
             // Only mint if current progression trophy marker is greater than current trophies
-            if (totalScore > 0 && totalScore > currentTrophies) {
+            if (newSumScore > 0 && newSumScore > currentTrophies) {
+                // burn old trophy amount
+                IGameItems(_gameRegistry.getSystem(GAME_ITEMS_ID)).burn(
+                    account,
+                    tokenId,
+                    currentTrophies
+                );
+                // mint new trophy amount
                 IGameItems(_gameRegistry.getSystem(GAME_ITEMS_ID)).mint(
                     account,
                     tokenId,
-                    totalScore - currentTrophies
+                    newSumScore
                 );
             }
         }

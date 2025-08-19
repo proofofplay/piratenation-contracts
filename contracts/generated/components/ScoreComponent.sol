@@ -7,20 +7,13 @@ import {TypesLibrary} from "../../core/TypesLibrary.sol";
 import {BaseStorageComponentV2, IBaseStorageComponentV2} from "../../core/components/BaseStorageComponentV2.sol";
 import {GAME_LOGIC_CONTRACT_ROLE} from "../../Constants.sol";
 
-uint256 constant ID = uint256(
-    keccak256("game.piratenation.marketplacelistingprimarydatacomponent.v1")
-);
+uint256 constant ID = uint256(keccak256("game.piratenation.scorecomponent.v1"));
 
 struct Layout {
-    uint256 listingId;
-    uint256 listingEntity;
-    uint256 listingPrice;
-    uint32 quantityListed;
-    uint32 listingTimestamp;
-    address sellerAddress;
+    uint256 value;
 }
 
-library MarketplaceListingPrimaryDataComponentStorage {
+library ScoreComponentStorage {
     bytes32 internal constant STORAGE_SLOT = bytes32(ID);
 
     // Declare struct for mapping entity to struct
@@ -42,10 +35,10 @@ library MarketplaceListingPrimaryDataComponentStorage {
 }
 
 /**
- * @title MarketplaceListingPrimaryDataComponent
- * @dev Primary data for a marketplace listing
+ * @title ScoreComponent
+ * @dev The score for an entity
  */
-contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
+contract ScoreComponent is BaseStorageComponentV2 {
     /** SETUP **/
 
     /** Sets the GameRegistry contract address for this contract  */
@@ -64,32 +57,12 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
         override
         returns (string[] memory keys, TypesLibrary.SchemaValue[] memory values)
     {
-        keys = new string[](6);
-        values = new TypesLibrary.SchemaValue[](6);
+        keys = new string[](1);
+        values = new TypesLibrary.SchemaValue[](1);
 
-        // The ID of the marketplace listing
-        keys[0] = "listing_id";
+        // The score for an entity
+        keys[0] = "value";
         values[0] = TypesLibrary.SchemaValue.UINT256;
-
-        // The entity being listed
-        keys[1] = "listing_entity";
-        values[1] = TypesLibrary.SchemaValue.UINT256;
-
-        // The price listed at
-        keys[2] = "listing_price";
-        values[2] = TypesLibrary.SchemaValue.UINT256;
-
-        // The quantity of the item being listed
-        keys[3] = "quantity_listed";
-        values[3] = TypesLibrary.SchemaValue.UINT32;
-
-        // The timestamp of the listing
-        keys[4] = "listing_timestamp";
-        values[4] = TypesLibrary.SchemaValue.UINT32;
-
-        // The address of the seller
-        keys[5] = "seller_address";
-        values[5] = TypesLibrary.SchemaValue.ADDRESS;
     }
 
     /**
@@ -109,33 +82,13 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
      * Sets the native value for this component
      *
      * @param entity Entity to get value for
-     * @param listingId The ID of the marketplace listing
-     * @param listingEntity The entity being listed
-     * @param listingPrice The price listed at
-     * @param quantityListed The quantity of the item being listed
-     * @param listingTimestamp The timestamp of the listing
-     * @param sellerAddress The address of the seller
+     * @param value The score for an entity
      */
     function setValue(
         uint256 entity,
-        uint256 listingId,
-        uint256 listingEntity,
-        uint256 listingPrice,
-        uint32 quantityListed,
-        uint32 listingTimestamp,
-        address sellerAddress
+        uint256 value
     ) external virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        _setValue(
-            entity,
-            Layout(
-                listingId,
-                listingEntity,
-                listingPrice,
-                quantityListed,
-                listingTimestamp,
-                sellerAddress
-            )
-        );
+        _setValue(entity, Layout(value));
     }
 
     /**
@@ -173,52 +126,23 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (Layout memory value) {
         // Get the struct from storage
-        value = MarketplaceListingPrimaryDataComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        value = ScoreComponentStorage.layout().entityIdToStruct[entity];
     }
 
     /**
      * Returns the native values for this component
      *
      * @param entity Entity to get value for
-     * @return listingId The ID of the marketplace listing
-     * @return listingEntity The entity being listed
-     * @return listingPrice The price listed at
-     * @return quantityListed The quantity of the item being listed
-     * @return listingTimestamp The timestamp of the listing
-     * @return sellerAddress The address of the seller
+     * @return value The score for an entity
      */
     function getValue(
         uint256 entity
-    )
-        external
-        view
-        virtual
-        returns (
-            uint256 listingId,
-            uint256 listingEntity,
-            uint256 listingPrice,
-            uint32 quantityListed,
-            uint32 listingTimestamp,
-            address sellerAddress
-        )
-    {
+    ) external view virtual returns (uint256 value) {
         if (has(entity)) {
-            Layout memory s = MarketplaceListingPrimaryDataComponentStorage
-                .layout()
-                .entityIdToStruct[entity];
-            (
-                listingId,
-                listingEntity,
-                listingPrice,
-                quantityListed,
-                listingTimestamp,
-                sellerAddress
-            ) = abi.decode(
-                _getEncodedValues(s),
-                (uint256, uint256, uint256, uint32, uint32, address)
-            );
+            Layout memory s = ScoreComponentStorage.layout().entityIdToStruct[
+                entity
+            ];
+            (value) = abi.decode(_getEncodedValues(s), (uint256));
         }
     }
 
@@ -231,18 +155,13 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
         uint256 entity
     ) external view virtual returns (bytes[] memory values) {
         // Get the struct from storage
-        Layout storage s = MarketplaceListingPrimaryDataComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout storage s = ScoreComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
 
         // ABI Encode all fields of the struct and add to values array
-        values = new bytes[](6);
-        values[0] = abi.encode(s.listingId);
-        values[1] = abi.encode(s.listingEntity);
-        values[2] = abi.encode(s.listingPrice);
-        values[3] = abi.encode(s.quantityListed);
-        values[4] = abi.encode(s.listingTimestamp);
-        values[5] = abi.encode(s.sellerAddress);
+        values = new bytes[](1);
+        values[0] = abi.encode(s.value);
     }
 
     /**
@@ -253,9 +172,9 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
     function getBytes(
         uint256 entity
     ) external view returns (bytes memory value) {
-        Layout memory s = MarketplaceListingPrimaryDataComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout memory s = ScoreComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
         value = _getEncodedValues(s);
     }
 
@@ -268,20 +187,10 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
         uint256 entity,
         bytes calldata value
     ) external onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
-        Layout memory s = MarketplaceListingPrimaryDataComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
-        (
-            s.listingId,
-            s.listingEntity,
-            s.listingPrice,
-            s.quantityListed,
-            s.listingTimestamp,
-            s.sellerAddress
-        ) = abi.decode(
-            value,
-            (uint256, uint256, uint256, uint32, uint32, address)
-        );
+        Layout memory s = ScoreComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
+        (s.value) = abi.decode(value, (uint256));
         _setValueToStorage(entity, s);
 
         // ABI Encode all native types of the struct
@@ -302,20 +211,10 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
             revert InvalidBatchData(entities.length, values.length);
         }
         for (uint256 i = 0; i < entities.length; i++) {
-            Layout memory s = MarketplaceListingPrimaryDataComponentStorage
-                .layout()
-                .entityIdToStruct[entities[i]];
-            (
-                s.listingId,
-                s.listingEntity,
-                s.listingPrice,
-                s.quantityListed,
-                s.listingTimestamp,
-                s.sellerAddress
-            ) = abi.decode(
-                values[i],
-                (uint256, uint256, uint256, uint32, uint32, address)
-            );
+            Layout memory s = ScoreComponentStorage.layout().entityIdToStruct[
+                entities[i]
+            ];
+            (s.value) = abi.decode(values[i], (uint256));
             _setValueToStorage(entities[i], s);
         }
         // ABI Encode all native types of the struct
@@ -331,9 +230,7 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
         uint256 entity
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entity from the component
-        delete MarketplaceListingPrimaryDataComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        delete ScoreComponentStorage.layout().entityIdToStruct[entity];
         _emitRemoveBytes(entity);
     }
 
@@ -347,9 +244,7 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
     ) public virtual onlyRole(GAME_LOGIC_CONTRACT_ROLE) {
         // Remove the entities from the component
         for (uint256 i = 0; i < entities.length; i++) {
-            delete MarketplaceListingPrimaryDataComponentStorage
-                .layout()
-                .entityIdToStruct[entities[i]];
+            delete ScoreComponentStorage.layout().entityIdToStruct[entities[i]];
         }
         _emitBatchRemoveBytes(entities);
     }
@@ -366,46 +261,23 @@ contract MarketplaceListingPrimaryDataComponent is BaseStorageComponentV2 {
     /** INTERNAL **/
 
     function _setValueToStorage(uint256 entity, Layout memory value) internal {
-        Layout storage s = MarketplaceListingPrimaryDataComponentStorage
-            .layout()
-            .entityIdToStruct[entity];
+        Layout storage s = ScoreComponentStorage.layout().entityIdToStruct[
+            entity
+        ];
 
-        s.listingId = value.listingId;
-        s.listingEntity = value.listingEntity;
-        s.listingPrice = value.listingPrice;
-        s.quantityListed = value.quantityListed;
-        s.listingTimestamp = value.listingTimestamp;
-        s.sellerAddress = value.sellerAddress;
+        s.value = value.value;
     }
 
     function _setValue(uint256 entity, Layout memory value) internal {
         _setValueToStorage(entity, value);
 
         // ABI Encode all native types of the struct
-        _emitSetBytes(
-            entity,
-            abi.encode(
-                value.listingId,
-                value.listingEntity,
-                value.listingPrice,
-                value.quantityListed,
-                value.listingTimestamp,
-                value.sellerAddress
-            )
-        );
+        _emitSetBytes(entity, abi.encode(value.value));
     }
 
     function _getEncodedValues(
         Layout memory value
     ) internal pure returns (bytes memory) {
-        return
-            abi.encode(
-                value.listingId,
-                value.listingEntity,
-                value.listingPrice,
-                value.quantityListed,
-                value.listingTimestamp,
-                value.sellerAddress
-            );
+        return abi.encode(value.value);
     }
 }

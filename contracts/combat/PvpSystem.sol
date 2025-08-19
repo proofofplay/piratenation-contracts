@@ -97,6 +97,18 @@ struct PlayerData {
     uint256 pirateEntity;
 }
 
+/// @notice Data for the end match event
+struct EmitEndMatchData {
+    address playerAddress;
+    uint256 pvpSeasonId;
+    uint8 outcome;
+    address opponentAddress;
+    int256 ratingChange;
+    uint256 trophyChange;
+    bool rankedMatch;
+    string ipfsUrl;
+}
+
 /** ERRORS **/
 
 /// @notice Error when no PvP season is set
@@ -133,12 +145,26 @@ error NegativeInputs();
 contract PvpSystem is GameRegistryConsumerUpgradeable {
     /** EVENTS **/
 
-    /// @notice Event when a match ends - no need to index opponent address as they will get their own event when they end their match
+    /**
+     * old event
     event EndMatch(
         uint256 indexed gameSessionId,
         address indexed playerAddress,
         uint8 indexed outcome,
         address opponentAddress,
+        string ipfsUrl
+    );
+    */
+
+    /// @notice Event when a match ends - no need to index opponent address as they will get their own event when they end their match
+    event EndMatchV2(
+        address indexed playerAddress,
+        uint256 indexed pvpSeasonId,
+        uint8 indexed outcome,
+        address opponentAddress,
+        int256 ratingChange,
+        uint256 trophyChange,
+        bool rankedMatch,
         string ipfsUrl
     );
 
@@ -285,11 +311,17 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
         );
         // Emit the end match event
         _emitEndMatch(
-            matchDataResult.gameSessionId,
-            playerData.playerAddress,
-            matchDataResult.outcome,
-            matchDataResult.opponentAddress,
-            matchDataResult.ipfsUrl
+            EmitEndMatchData({
+                playerAddress: playerData.playerAddress,
+                pvpSeasonId: pvpSeasonId,
+                outcome: matchDataResult.outcome,
+                opponentAddress: matchDataResult.opponentAddress,
+                ratingChange: (playerPvpData.matchmakingRating - oldRating) /
+                    1000,
+                trophyChange: trophyAdjustmentResult.trophyChange,
+                rankedMatch: true,
+                ipfsUrl: matchDataResult.ipfsUrl
+            })
         );
     }
 
@@ -304,11 +336,16 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
     ) external onlyRole(PVP_VALIDATOR_ROLE) {
         // Emit the end match event
         _emitEndMatch(
-            matchDataResult.gameSessionId,
-            playerOneAddress,
-            matchDataResult.outcome,
-            matchDataResult.opponentAddress,
-            matchDataResult.ipfsUrl
+            EmitEndMatchData({
+                playerAddress: playerOneAddress,
+                pvpSeasonId: 0,
+                outcome: matchDataResult.outcome,
+                opponentAddress: matchDataResult.opponentAddress,
+                ratingChange: 0,
+                trophyChange: 0,
+                rankedMatch: false,
+                ipfsUrl: matchDataResult.ipfsUrl
+            })
         );
     }
 
@@ -437,25 +474,18 @@ contract PvpSystem is GameRegistryConsumerUpgradeable {
 
     /**
      * Emit the end match event
-     * @param gameSessionId The ID of the game session
-     * @param playerAddress The address of the player
-     * @param outcome The outcome of the match
-     * @param opponentAddress The address of the opponent
-     * @param ipfsUrl The IPFS URL of the match
+     * @param emitEndMatchData The data for the end match event
      */
-    function _emitEndMatch(
-        uint256 gameSessionId,
-        address playerAddress,
-        uint8 outcome,
-        address opponentAddress,
-        string memory ipfsUrl
-    ) internal {
-        emit EndMatch(
-            gameSessionId,
-            playerAddress,
-            outcome,
-            opponentAddress,
-            ipfsUrl
+    function _emitEndMatch(EmitEndMatchData memory emitEndMatchData) internal {
+        emit EndMatchV2(
+            emitEndMatchData.playerAddress,
+            emitEndMatchData.pvpSeasonId,
+            emitEndMatchData.outcome,
+            emitEndMatchData.opponentAddress,
+            emitEndMatchData.ratingChange,
+            emitEndMatchData.trophyChange,
+            emitEndMatchData.rankedMatch,
+            emitEndMatchData.ipfsUrl
         );
     }
 
